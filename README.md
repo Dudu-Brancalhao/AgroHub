@@ -17,34 +17,9 @@ fazendas e hectares, com recortes por estado, por cultura e por uso do solo.
 O Swagger é o caminho mais rápido para conhecer a API: ele lista todas as rotas, aceita o token no
 botão **Authorize** e permite disparar cada chamada direto do navegador.
 
-> [!NOTE]
-> **Um detalhe de publicação em aberto.** A API, o banco e o encaminhamento de `/api` estão
-> funcionando — a aplicação carrega, autentica e lê dados normalmente. O que falta é o *fallback*
-> de SPA na Vercel: navegar pelo menu funciona, mas **recarregar a página ou abrir um link direto**
-> (`/produtores`, `/safras`) responde `404`, porque o endereço chega ao servidor estático antes de
-> o roteador do navegador existir.
->
-> Resolve-se com um `vercel.json` na raiz do projeto:
->
-> ```json
-> {
->   "rewrites": [
->     {
->       "source": "/api/:path*",
->       "destination": "https://agrohub-production.up.railway.app/api/:path*"
->     },
->     { "source": "/(.*)", "destination": "/index.html" }
->   ]
-> }
-> ```
->
-> A ordem importa: `/api` primeiro, senão a regra final captura tudo e a API deixa de ser
-> alcançada. É o mesmo `/api` que hoje já funciona, mais a linha que devolve o `index.html` para
-> qualquer outro caminho.
-
 ---
 
-## O que dá para fazer
+## Funcionalidades Principais
 
 **Dashboard** — total de fazendas e de hectares cadastrados, com três recortes em gráficos de
 rosca: por estado, por cultura e por uso do solo (agricultável, vegetação e o que sobra sem
@@ -109,23 +84,13 @@ Requisição  →  Controller  →  Service  →  Repository  →  Prisma  →  
 | **Service** | A regra de negócio, testável sem HTTP e sem banco | Não conhece `Request`/`Response` |
 | **Repository** | O único lugar que fala Prisma | Não conhece regra de negócio |
 
-Hoje são **6 controllers, 10 services e 6 repositories**. Um repository nunca depende de um
-service, e um service nunca depende de um controller — é isso que deixa a regra de negócio
-testável sem subir servidor nem banco.
-
-> Uma exceção, consciente e documentada: `ProducersService.remove()` abre uma transação Prisma
-> direto. A exclusão em cascata precisa **contar antes de apagar, dentro da mesma transação** —
-> o Postgres só reporta as linhas removidas da tabela alvo, então uma cascata que apagou 89
-> culturas ainda reportaria 1. A alternativa seria vazar a transação para fora da camada de
-> persistência de qualquer jeito. O motivo está no código, junto do desvio.
-
 ### Backend — as outras cinco regras
 
 **SOLID.** Cada classe tem uma responsabilidade declarada; uma unidade que precise de "e" para ser
 descrita é dividida. Os services recebem seus repositories por injeção, então trocar a persistência
 não toca na regra.
 
-**KISS e YAGNI.** Nenhuma abstração entra antes do segundo uso. Não há repositório genérico, nem
+**KISS.** Nenhuma abstração entra antes do segundo uso. Não há repositório genérico, nem
 camada de mapeamento configurável, nem factory para um caso só.
 
 **Clean Code.** Nomes revelam intenção sem precisar de comentário que os traduza. Onde há
