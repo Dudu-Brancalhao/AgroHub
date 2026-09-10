@@ -22,7 +22,7 @@ botão **Authorize** e permite disparar cada chamada direto do navegador.
 ## Funcionalidades Principais
 
 **Dashboard** — total de fazendas e de hectares cadastrados, com três recortes em gráficos de
-rosca: por estado, por cultura e por uso do solo (agricultável, vegetação e o que sobra sem
+pizza: por estado, por cultura e por uso do solo (agricultável, vegetação e o que sobra sem
 classificação).
 
 **Produtores** — lista paginada com busca por nome ou documento, mais cadastro, edição e exclusão.
@@ -44,25 +44,45 @@ flowchart LR
     A -.-> S["Swagger<br/>/api/docs"]
 ```
 
-Em desenvolvimento o Vite encaminha `/api` para a API; em produção a Vercel faz o mesmo para o
-Railway. A razão é a mesma nos dois casos: **a API é de origem única por desenho —
-`enableCors()` nunca é chamado.** Todas as chamadas do cliente são relativas (`/api/...`);
-nenhuma URL absoluta de API existe no código do frontend.
-
 ```
 AgroHub/
-├── backend/                 API NestJS + Prisma
-│   ├── prisma/              schema, migrations e seed
-│   └── src/                 controller → service → repository
-├── frontend/                Interface React + Redux
+├── backend/                      API NestJS + Prisma
+│   ├── prisma/
+│   │   ├── schema.prisma         tabelas, índices e chaves estrangeiras
+│   │   ├── migrations/           histórico versionado, aplicado no boot do container
+│   │   └── seed.ts               dados de exemplo
+│   ├── src/
+│   │   ├── producers/            um domínio completo — as três camadas, lado a lado
+│   │   │   ├── *.controller.ts   recebe, valida via DTO, delega
+│   │   │   ├── *.service.ts      a regra de negócio
+│   │   │   ├── *.repository.ts   o único que fala Prisma
+│   │   │   ├── *.module.ts       liga os três
+│   │   │   ├── dto/              o que ENTRA, validado no request
+│   │   │   └── entities/         o que SAI, projetado para a resposta
+│   │   ├── properties/           fazendas e culturas, mesma estrutura
+│   │   ├── harvests/             safras, mesma estrutura
+│   │   ├── dashboard/            os números consolidados, mesma estrutura
+│   │   ├── auth/                 login, registro, guards e strategies
+│   │   ├── users/                só módulo, repositório e entidade — quem expõe é o auth
+│   │   ├── common/               filtros, decorators, validação e configuração do Swagger
+│   │   ├── config/               variáveis de ambiente validadas no boot
+│   │   ├── throttling/           limites de tentativa, persistidos no banco
+│   │   └── health/               a única rota pública além do login e do cadastro
+│   └── test/                     cinco projetos Jest, de unit a security
+├── frontend/                     Interface React + Redux
 │   └── src/
-│       ├── app/             store, hooks tipados e rotas
-│       ├── features/        uma pasta por domínio
-│       ├── components/      componentes compartilhados
-│       └── lib/             regras puras (áreas, CPF/CNPJ, cliente HTTP)
-├── specs/                   Especificações de cada entrega
-├── docker-compose.yml       API + PostgreSQL
-└── docker-compose.test.yml  PostgreSQL descartável para testes
+│       ├── features/             uma pasta por domínio (auth, dashboard, producers…)
+│       ├── components/           componentes compartilhados, sem domínio
+│       ├── lib/                  regras puras (áreas, CPF/CNPJ, formatação, httpClient)
+│       ├── app/                  store, hooks tipados e a tabela de rotas
+│       ├── layout/               cabeçalho, menu lateral e transição de página
+│       ├── icons/                Material Icons reexportados por papel
+│       ├── styles/               tema, estilo global e animações
+│       └── config/               leitura das variáveis de ambiente
+├── specs/                        Especificação de cada entrega
+├── .specify/                     constituição do projeto e templates
+├── docker-compose.yml            API + PostgreSQL
+└── docker-compose.test.yml       PostgreSQL descartável para testes
 ```
 
 As regras abaixo não são aspiração: estão escritas em
@@ -83,8 +103,6 @@ Requisição  →  Controller  →  Service  →  Repository  →  Prisma  →  
 | **Controller** | Recebe, valida via DTO, delega, mapeia a resposta | Nenhuma regra de negócio |
 | **Service** | A regra de negócio, testável sem HTTP e sem banco | Não conhece `Request`/`Response` |
 | **Repository** | O único lugar que fala Prisma | Não conhece regra de negócio |
-
-### Backend — as outras cinco regras
 
 **SOLID.** Cada classe tem uma responsabilidade declarada; uma unidade que precise de "e" para ser
 descrita é dividida. Os services recebem seus repositories por injeção, então trocar a persistência
@@ -119,17 +137,6 @@ Nenhum teste depende de estado externo real, e todos rodam em qualquer ordem.
 
 O frontend não é dividido por tipo de arquivo (`components/`, `hooks/`, `services/`), e sim **por
 domínio**. Cada pasta em `features/` carrega tudo o que aquele domínio precisa:
-
-```
-features/producers/
-├── api.ts                    as chamadas HTTP deste domínio
-├── producersSlice.ts         estado, thunks e invalidação
-├── selectors.ts              leituras derivadas
-├── types.ts                  os modelos, espelhados dos DTOs
-├── ProducerList.tsx          as telas
-├── ProducerDetail.tsx
-└── *.test.tsx                os testes, ao lado do que testam
-```
 
 São seis: `auth`, `dashboard`, `producers`, `properties`, `harvests` e `ui`. O raio de alcance de
 uma mudança é uma pasta, e um arquivo e seu teste andam juntos.

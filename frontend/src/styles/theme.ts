@@ -17,18 +17,45 @@ export const theme = {
     textMuted: '#5c6b5f',
     textInverted: '#ffffff',
 
-    // Verde saturado ao máximo que ainda carrega texto branco: 4.77:1 contra o branco,
-    // acima do mínimo de 4.5:1. O anterior tinha 45% de saturação; este tem 100%.
-    primary: '#008531',
-    primaryHover: '#006b27',
-    primarySoft: '#eafbf0',
+    /**
+     * ATENÇÃO — desvio conhecido de acessibilidade, escolhido conscientemente.
+     *
+     * `primary` rende **2,82:1** contra o branco, abaixo dos 4,5:1 que a WCAG AA pede para texto
+     * normal. Na prática: o texto branco de um botão em repouso e os links ficam com contraste
+     * insuficiente para parte das pessoas.
+     *
+     * O motivo é geométrico, não uma escolha ruim de matiz: contraste contra o branco é governado
+     * pela luminosidade, então qualquer verde que *pareça* vivo a este ponto necessariamente
+     * reprova. `#008531` é o verde mais vivo que ainda carrega texto branco, a 4,77:1 — é para lá
+     * que se volta se um dia a conformidade pesar mais que a identidade.
+     *
+     * Onde o desvio aparece, por decisão de identidade visual:
+     *
+     *   - texto branco em botão em repouso e links ......... 2,82:1
+     *   - item ativo do menu, sobre `primarySoft` .......... 2,62:1
+     *   - ícone do selo dos totais, sobre `primarySoft` .... 2,62:1
+     *
+     * `primaryHover` (4,86:1 no branco, 4,52:1 sobre o verde claro) é a saída conforme para os
+     * dois últimos, e continua pintando o hover dos botões — ali ele não é escolha estética, é
+     * função: um hover da mesma cor do repouso não responde ao ponteiro.
+     *
+     * `primarySoft` é um tom claro do mesmo matiz (159°), e não de outro verde: os três tokens
+     * saem da mesma cor.
+     *
+     * Nota: `#1baf7a` é também a terceira cor da paleta dos gráficos. A sobreposição é conhecida e
+     * aceita — a marca e a fatia "SP"/"Café" compartilham o mesmo verde.
+     */
+    primary: '#1baf7a',
+    primaryHover: '#12815b',
+    primarySoft: '#ebfaf5',
 
     danger: '#b3261e',
     dangerHover: '#8f1e18',
     dangerSoft: '#fbe9e7',
 
-    success: '#008531',
-    successSoft: '#eafbf0',
+    // O mesmo verde da marca: a borda do aviso de sucesso é decorativa, não carrega texto.
+    success: '#1baf7a',
+    successSoft: '#ebfaf5',
 
     warning: '#8a6116',
     warningSoft: '#fbf1dc',

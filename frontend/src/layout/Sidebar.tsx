@@ -76,8 +76,11 @@ const Entry = styled(NavLink)`
 
   &.active {
     background: ${({ theme }) => theme.colors.primarySoft};
-    /* O tom mais escuro, não o primário: sobre o verde claro ele rende 6.2:1 em vez de 4.4:1. */
-    color: ${({ theme }) => theme.colors.primaryHover};
+    /*
+     * O verde da marca, por decisao de identidade visual: sobre o verde claro ele rende 2,62:1,
+     * abaixo dos 4,5:1 da WCAG AA para texto normal. O tom escuro (primaryHover) daria 4,52:1.
+     */
+    color: ${({ theme }) => theme.colors.primary};
   }
 `;
 

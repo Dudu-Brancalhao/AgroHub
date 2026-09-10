@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { fetchSummary } from './dashboardSlice';
 import { selectBreakdown, selectSummary, selectSummaryIsStale, selectSummaryRequest } from './selectors';
 import { PieChart } from '../../components/PieChart';
+import { FarmsTotalIcon, HectaresTotalIcon } from '../../icons';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { DashboardSkeleton } from './DashboardSkeleton';
@@ -38,6 +39,35 @@ const Card = styled.section`
   box-shadow: ${({ theme }) => theme.shadow.card};
   /* Todos os cartões da linha acompanham o mais alto (item 7). */
   height: 100%;
+`;
+
+/*
+ * O cartão de total vira uma linha: selo à esquerda, números à direita.
+ */
+const TotalRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.md};
+`;
+
+/**
+ * O selo do ícone.
+ *
+ * Puramente informativo: sem hover, sem cursor de ponteiro, sem foco — não é um botão e não deve
+ * parecer um. O verde claro é o mesmo do item ativo do menu, para que a interface tenha um único
+ * vocabulário de destaque em vez de dois.
+ */
+const IconBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: ${({ theme }) => theme.radii.md};
+  background: ${({ theme }) => theme.colors.primarySoft};
+  /* O verde da marca. Sobre o verde claro rende 2,62:1, abaixo dos 3:1 pedidos para um ícone. */
+  color: ${({ theme }) => theme.colors.primary};
 `;
 
 const TotalLabel = styled.p`
@@ -160,12 +190,26 @@ export function Dashboard() {
 
       <Totals>
         <Card>
-          <TotalLabel>Fazendas cadastradas</TotalLabel>
-          <TotalValue>{formatCount(summary.totals.farms)}</TotalValue>
+          <TotalRow>
+            <IconBadge>
+              <FarmsTotalIcon size={26} />
+            </IconBadge>
+            <div>
+              <TotalLabel>Fazendas cadastradas</TotalLabel>
+              <TotalValue>{formatCount(summary.totals.farms)}</TotalValue>
+            </div>
+          </TotalRow>
         </Card>
         <Card>
-          <TotalLabel>Hectares cadastrados</TotalLabel>
-          <TotalValue>{formatArea(summary.totals.hectares)} ha</TotalValue>
+          <TotalRow>
+            <IconBadge>
+              <HectaresTotalIcon size={26} />
+            </IconBadge>
+            <div>
+              <TotalLabel>Hectares cadastrados</TotalLabel>
+              <TotalValue>{formatArea(summary.totals.hectares)} ha</TotalValue>
+            </div>
+          </TotalRow>
         </Card>
       </Totals>
 

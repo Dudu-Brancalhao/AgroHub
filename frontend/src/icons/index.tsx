@@ -14,6 +14,8 @@ import CheckCircleOutlineRounded from '@mui/icons-material/CheckCircleOutlineRou
 import LogoutRounded from '@mui/icons-material/LogoutRounded';
 import AgricultureRounded from '@mui/icons-material/AgricultureRounded';
 import LocalFloristRounded from '@mui/icons-material/LocalFloristRounded';
+import FmdGoodRounded from '@mui/icons-material/FmdGoodRounded';
+import MapRounded from '@mui/icons-material/MapRounded';
 import type { SvgIconProps } from '@mui/material/SvgIcon';
 import type { ComponentType } from 'react';
 
@@ -54,6 +56,10 @@ export const FarmIcon = withSize(AgricultureRounded);
 
 /** A marca. Aparece ao lado do nome, no canto superior esquerdo. */
 export const BrandIcon = withSize(LocalFloristRounded);
+
+/** Os dois totais do painel. Decorativos: o rótulo ao lado é que carrega o significado. */
+export const FarmsTotalIcon = withSize(FmdGoodRounded);
+export const HectaresTotalIcon = withSize(MapRounded);
 
 export const MenuIcon = withSize(MenuRounded);
 export const CloseIcon = withSize(CloseRounded);

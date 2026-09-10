@@ -105,9 +105,18 @@ qualquer outro que tente.
 - **Os ícones vêm do Material Icons**, mas passam todos por `src/icons/index.tsx`, que os
   reexporta com nomes de papel (`ProducersIcon`, `TrashIcon`). O resto do código nunca importa a
   biblioteca direto, então trocar um ícone — ou a biblioteca inteira — mexe em um arquivo só.
-- **Os gráficos são feitos aqui.** Nenhuma biblioteca de gráficos: `PieChart.tsx` desenha as
-  roscas do painel em SVG, com uma paleta de seis cores validada para daltonismo. Cada fatia
-  aparece também na legenda como texto, para que a identidade nunca dependa só da cor.
+- **Os gráficos são feitos aqui.** Nenhuma biblioteca de gráficos: `PieChart.tsx` desenha os
+  gráficos de pizza do painel em SVG, com uma paleta de seis cores validada para daltonismo. Cada
+  fatia aparece também na legenda como texto, para que a identidade nunca dependa só da cor.
+- **O verde da marca é `#1baf7a`, e isso é um desvio conhecido.** Ele rende **2,82:1** contra o
+  branco, abaixo dos 4,5:1 que a WCAG AA pede para texto normal — o texto branco de um botão em
+  repouso e os links ficam com contraste insuficiente para parte das pessoas. Foi uma escolha de
+  identidade visual, feita com o número na mesa. O mesmo vale para o item ativo do menu e o ícone
+  do selo dos totais, que usam o verde da marca sobre o verde claro a **2,62:1**. `primaryHover`
+  (`#12815b`) é a saída conforme para esses dois — 4,52:1 sobre o verde claro — e segue pintando o
+  hover dos botões, onde não é estética e sim função: um hover da mesma cor do repouso não responde
+  ao ponteiro. Os três tokens saem do mesmo matiz (159°). Para voltar ao conforme no geral,
+  `#008531` é o verde mais vivo que ainda carrega texto branco, a 4,77:1.
 - **O token fica no `localStorage`**, para sobreviver a um recarregamento. Sair da conta em uma
   aba desconecta as outras.
 - **Em desenvolvimento, cada requisição sai duas vezes.** É o `StrictMode` do React 18, que monta,

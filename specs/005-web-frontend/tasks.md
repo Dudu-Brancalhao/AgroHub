@@ -446,12 +446,14 @@ corrected** — the behaviour is right, the specification's wording is not.
 
 ## Follow-up changes (post-implementation, requested by the product owner)
 
-**Breakdowns are now pie charts.** The three Dashboard breakdowns render as donut charts instead
-of proportional bars. `components/Bar.tsx` was deleted; `components/PieChart.tsx` replaces it.
+**Breakdowns are now pizza charts.** The three Dashboard breakdowns render as solid pie charts
+instead of proportional bars — `specs/003-dashboard-api` asks for a "gráfico de pizza", so the
+wedges run from the centre with no hole. `components/Bar.tsx` was deleted;
+`components/PieChart.tsx` replaces it.
 
 The selector changed with them, and the change is not cosmetic: a bar's length is a share of the
 *largest* category, while a slice is a share of the *total*. `selectBreakdown` now returns
-`share` (percent of the whole) plus the whole itself, which the donut shows in its hole.
+`share` (percent of the whole) plus the whole itself, which closes the legend as a total row.
 
 Two rules the pie form brings with it, both enforced in `selectors.ts`:
 

@@ -23,11 +23,24 @@ describe('PieChart', () => {
     expect(container.querySelectorAll('path')).toHaveLength(3);
   });
 
-  it('puts the whole in the middle of the donut', () => {
+  /**
+   * The requirement is a "gráfico de pizza" (specs/003-dashboard-api), so the wedges are solid:
+   * each one runs from the exact centre out to the rim. A donut would leave a hole, and the
+   * paths would start on the inner rim instead.
+   */
+  it('draws solid wedges from the centre, with no hole', () => {
+    const { container } = render();
+
+    for (const path of Array.from(container.querySelectorAll('path'))) {
+      expect(path.getAttribute('d')).toMatch(/^M 100 100 L /);
+    }
+  });
+
+  it('closes the legend with the total the parts add up to', () => {
     render();
 
+    expect(screen.getByText('Total')).toBeInTheDocument();
     expect(screen.getByText('6.000,22 ha')).toBeInTheDocument();
-    expect(screen.getByText('hectares')).toBeInTheDocument();
   });
 
   /**
@@ -77,12 +90,15 @@ describe('PieChart', () => {
     expect(screen.getByText('5')).toBeInTheDocument();
   });
 
-  it('draws a single category as a continuous ring rather than a degenerate wedge', () => {
+  it('draws a single category as a full circle rather than a degenerate wedge', () => {
     const { container } = render({
       slices: [{ key: 'only', label: 'Única', value: '100', share: 100, color: '#2a78d6' }],
     });
 
-    expect(container.querySelectorAll('path')).toHaveLength(1);
+    const paths = container.querySelectorAll('path');
+    expect(paths).toHaveLength(1);
+    // A 360-degree arc collapses to nothing, so this one case is drawn as a circle instead.
+    expect(paths[0]!.getAttribute('d')).toMatch(/^M 100 6 A 94 94 /);
     expect(screen.getByText('Única')).toBeInTheDocument();
   });
 
