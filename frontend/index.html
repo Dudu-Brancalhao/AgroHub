@@ -7,6 +7,17 @@
     <meta name="description" content="Cadastro de produtores rurais, propriedades e safras." />
 
     <!--
+      A flor do BrandIcon, servida de public/ e referenciada pela raiz.
+
+      SVG em vez de .ico: e o mesmo caminho que o cabecalho desenha, escala sem borrar em
+      qualquer densidade de tela e acompanha o tema claro/escuro do navegador. O `sizes="any"`
+      diz ao navegador que este arquivo serve para todos os tamanhos, senao alguns ainda pedem
+      /favicon.ico e registram um 404 no console.
+    -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <meta name="theme-color" content="#008531" />
+
+    <!--
       Poppins, nos três pesos que o tema usa (400, 500, 600).
       `display=swap` para o texto aparecer no fallback enquanto a fonte carrega, em vez de
       deixar a tela em branco.
