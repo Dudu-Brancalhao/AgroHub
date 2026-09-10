@@ -1,0 +1,26 @@
+{
+  // Compiles the seed into something the deployed image can run.
+  //
+  // The runtime image has no ts-node and no src/, so prisma/seed.ts cannot execute there as
+  // TypeScript — and it must not be rewritten to avoid the import either: it derives nameSearch,
+  // nameNormalized and documentType with the API's own helpers precisely so those values cannot
+  // drift from what the repository layer writes. Copying those two functions into the seed would
+  // trade a build step for a correctness risk.
+  //
+  // So the seed is compiled with its dependency closure into its own directory. `rootDir: "."`
+  // keeps the prisma/ and src/ structure, so the emitted `require('../src/common/validation/...')`
+  // resolves inside dist-seed exactly as it does in the source tree.
+  //
+  // A SEPARATE outDir, never dist/. Emitting into dist/ would put src/ files at a second path and
+  // reintroduce the rootDir ambiguity that moved dist/main.js and broke the first deploy.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist-seed",
+    "incremental": false,
+    // The seed reads process.env directly and has no Nest decorators to preserve.
+    "sourceMap": false
+  },
+  "include": ["prisma/seed.ts"],
+  "exclude": ["node_modules", "dist", "dist-seed", "test"]
+}

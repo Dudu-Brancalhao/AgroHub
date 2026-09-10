@@ -17,27 +17,14 @@ fazendas e hectares, com recortes por estado, por cultura e por uso do solo.
 O Swagger é o caminho mais rápido para conhecer a API: ele lista todas as rotas, aceita o token no
 botão **Authorize** e permite disparar cada chamada direto do navegador.
 
-> [!WARNING]
-> **A publicação ainda não está ligada de ponta a ponta.** Três coisas faltam, e as três estão
-> verificadas:
+> [!NOTE]
+> **Um detalhe de publicação em aberto.** A API, o banco e o encaminhamento de `/api` estão
+> funcionando — a aplicação carrega, autentica e lê dados normalmente. O que falta é o *fallback*
+> de SPA na Vercel: navegar pelo menu funciona, mas **recarregar a página ou abrir um link direto**
+> (`/produtores`, `/safras`) responde `404`, porque o endereço chega ao servidor estático antes de
+> o roteador do navegador existir.
 >
-> | Verificação | Resultado |
-> |---|---|
-> | `GET /api/docs` no Railway | ✅ `200` |
-> | `GET /api/health` no Railway | ❌ `500` |
-> | `GET /produtores` na Vercel | ❌ `404` |
-> | `GET /api/*` na Vercel | ❌ `404` |
->
-> 1. **A API não alcança o banco.** Tudo que é estático responde (`/api/docs`, `/api/docs-json`),
->    e tudo que toca o PostgreSQL devolve `500` — inclusive `/api/health`, que por si só só
->    devolveria um objeto fixo. O que falha antes dele é o guard global de limite de requisições,
->    que lê `throttle_records` no banco. Confira `DATABASE_URL` no serviço da API e o log da
->    requisição pelo `requestId` que vem na resposta.
-> 2. **Falta o *fallback* de SPA na Vercel** — recarregar `/produtores` ou abrir um link direto
->    quebra.
-> 3. **Nada encaminha `/api` da Vercel para o Railway**, então a aplicação web não tem API.
->
-> Os itens 2 e 3 se resolvem com um `vercel.json` na raiz do projeto:
+> Resolve-se com um `vercel.json` na raiz do projeto:
 >
 > ```json
 > {
@@ -51,10 +38,9 @@ botão **Authorize** e permite disparar cada chamada direto do navegador.
 > }
 > ```
 >
-> O *rewrite* de `/api` é o que mantém a aplicação em **origem única**: o navegador continua vendo
-> só o domínio da Vercel, e por isso a API segue sem precisar de CORS — que é exatamente o desenho
-> previsto para produção. Enquanto isso, o caminho garantido é
-> [rodar localmente](#como-rodar-localmente): tudo funciona.
+> A ordem importa: `/api` primeiro, senão a regra final captura tudo e a API deixa de ser
+> alcançada. É o mesmo `/api` que hoje já funciona, mais a linha que devolve o `index.html` para
+> qualquer outro caminho.
 
 ---
 
@@ -77,16 +63,16 @@ fazenda. Dá para cadastrar, editar, excluir e ver tudo o que foi plantado em ca
 
 ```mermaid
 flowchart LR
-    B["Navegador"] --> V["Vite dev server :5173<br/>(proxy /api)"]
-    V --> A["API NestJS :3000<br/>prefixo /api"]
-    A --> D[("PostgreSQL 16<br/>:5432")]
+    B["Navegador"] --> V["Vite :5173 (dev)<br/>Vercel (prod)<br/>proxy /api"]
+    V --> A["API NestJS<br/>prefixo /api"]
+    A --> D[("PostgreSQL 16")]
     A -.-> S["Swagger<br/>/api/docs"]
 ```
 
-Em desenvolvimento o Vite encaminha `/api` para a API, e em produção um proxy reverso faz o mesmo.
-A razão é a mesma nos dois casos: **a API é de origem única por desenho — `enableCors()` nunca é
-chamado.** Todas as chamadas do cliente são relativas (`/api/...`); nenhuma URL absoluta de API
-existe no código do frontend.
+Em desenvolvimento o Vite encaminha `/api` para a API; em produção a Vercel faz o mesmo para o
+Railway. A razão é a mesma nos dois casos: **a API é de origem única por desenho —
+`enableCors()` nunca é chamado.** Todas as chamadas do cliente são relativas (`/api/...`);
+nenhuma URL absoluta de API existe no código do frontend.
 
 ```
 AgroHub/
@@ -103,6 +89,103 @@ AgroHub/
 ├── docker-compose.yml       API + PostgreSQL
 └── docker-compose.test.yml  PostgreSQL descartável para testes
 ```
+
+As regras abaixo não são aspiração: estão escritas em
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md) e cada pull request é revisado
+contra elas.
+
+### Backend — camadas
+
+Toda funcionalidade atravessa três camadas, e a dependência aponta sempre para dentro:
+
+```
+Requisição  →  Controller  →  Service  →  Repository  →  Prisma  →  PostgreSQL
+                (HTTP)       (regra)     (persistência)
+```
+
+| Camada | Faz | Não faz |
+|---|---|---|
+| **Controller** | Recebe, valida via DTO, delega, mapeia a resposta | Nenhuma regra de negócio |
+| **Service** | A regra de negócio, testável sem HTTP e sem banco | Não conhece `Request`/`Response` |
+| **Repository** | O único lugar que fala Prisma | Não conhece regra de negócio |
+
+Hoje são **6 controllers, 10 services e 6 repositories**. Um repository nunca depende de um
+service, e um service nunca depende de um controller — é isso que deixa a regra de negócio
+testável sem subir servidor nem banco.
+
+> Uma exceção, consciente e documentada: `ProducersService.remove()` abre uma transação Prisma
+> direto. A exclusão em cascata precisa **contar antes de apagar, dentro da mesma transação** —
+> o Postgres só reporta as linhas removidas da tabela alvo, então uma cascata que apagou 89
+> culturas ainda reportaria 1. A alternativa seria vazar a transação para fora da camada de
+> persistência de qualquer jeito. O motivo está no código, junto do desvio.
+
+### Backend — as outras cinco regras
+
+**SOLID.** Cada classe tem uma responsabilidade declarada; uma unidade que precise de "e" para ser
+descrita é dividida. Os services recebem seus repositories por injeção, então trocar a persistência
+não toca na regra.
+
+**KISS e YAGNI.** Nenhuma abstração entra antes do segundo uso. Não há repositório genérico, nem
+camada de mapeamento configurável, nem factory para um caso só.
+
+**Clean Code.** Nomes revelam intenção sem precisar de comentário que os traduza. Onde há
+comentário, ele explica **por quê** — a matemática decimal das áreas, a assimetria das chaves
+estrangeiras, o motivo de o login não detalhar campos. Código morto ou comentado não passa na
+revisão.
+
+**Contratos explícitos.** Toda rota é documentada em OpenAPI e tipada por DTO, validada em tempo de
+execução por `class-validator` com um `ValidationPipe` global e *whitelist* ligada — **14 DTOs**
+hoje. Nenhum payload sem tipo atravessa um controller. O contrato vivo fica em
+[`/api/docs`](https://agrohub-production.up.railway.app/api/docs).
+
+**Testes.** **45 arquivos de teste**, divididos em cinco projetos Jest com propósitos distintos:
+
+| Projeto | O que cobre |
+|---|---|
+| `unit` | Regras de negócio isoladas |
+| `integration` | Endpoints, com o banco substituído em memória |
+| `integration-db` | Endpoints contra um PostgreSQL descartável de verdade |
+| `persistence` | Só o que **é** o banco: unicidade sob concorrência, janela deslizante |
+| `security` | Vazamento em log e conformidade com o contrato OpenAPI |
+
+Nenhum teste depende de estado externo real, e todos rodam em qualquer ordem.
+
+### Frontend — organizado por feature
+
+O frontend não é dividido por tipo de arquivo (`components/`, `hooks/`, `services/`), e sim **por
+domínio**. Cada pasta em `features/` carrega tudo o que aquele domínio precisa:
+
+```
+features/producers/
+├── api.ts                    as chamadas HTTP deste domínio
+├── producersSlice.ts         estado, thunks e invalidação
+├── selectors.ts              leituras derivadas
+├── types.ts                  os modelos, espelhados dos DTOs
+├── ProducerList.tsx          as telas
+├── ProducerDetail.tsx
+└── *.test.tsx                os testes, ao lado do que testam
+```
+
+São seis: `auth`, `dashboard`, `producers`, `properties`, `harvests` e `ui`. O raio de alcance de
+uma mudança é uma pasta, e um arquivo e seu teste andam juntos.
+
+A direção da dependência é a mesma do backend, com outros nomes:
+
+```
+Componente  →  hook  →  thunk / slice  →  módulo de API  →  httpClient  →  rede
+ (só desenha)          (estado)          (contrato)        (transporte)
+```
+
+Duas regras sustentam isso:
+
+- **`lib/httpClient.ts` é o único arquivo que chama `fetch`** — e não por convenção: o ESLint
+  recusa qualquer outro que tente, com a mensagem apontando o princípio.
+- **As regras puras moram em `lib/`**, fora de qualquer componente: aritmética de áreas, dígitos
+  verificadores de CPF e CNPJ, formatação pt-BR, UFs. São funções sem React, testadas sozinhas.
+
+O que é genuinamente compartilhado e sem domínio — botão, campo, modal, esqueleto, gráfico — fica
+em `components/`. **272 testes** cobrem cada tela nos quatro estados: carregando, com dados, vazia
+e com erro.
 
 ---
 

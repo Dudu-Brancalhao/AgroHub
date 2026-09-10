@@ -25,6 +25,11 @@ RUN npm run build
 # on the deployment target. One assertion turns that into a failed build with an obvious cause.
 RUN test -f dist/main.js || (echo "BUILD ERROR: dist/main.js missing. Actual dist layout:" && ls -R dist | head -40 && exit 1)
 
+# The seed, compiled separately so the deployed image can run it without ts-node.
+# Its own outDir on purpose — see tsconfig.seed.json for why it must never emit into dist/.
+RUN npx tsc -p tsconfig.seed.json \
+ && test -f dist-seed/prisma/seed.js || (echo "BUILD ERROR: dist-seed/prisma/seed.js missing" && exit 1)
+
 RUN npm prune --omit=dev
 
 # --- runtime stage ---------------------------------------------------------
@@ -43,6 +48,7 @@ ENV UV_THREADPOOL_SIZE=8
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist-seed ./dist-seed
 COPY --from=build /app/prisma ./prisma
 COPY package*.json ./
 

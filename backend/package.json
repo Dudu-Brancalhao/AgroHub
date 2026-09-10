@@ -21,7 +21,9 @@
     "test:all": "jest --runInBand",
     "test:integration-db": "jest --selectProjects integration-db --runInBand",
     "test:db:migrate": "prisma migrate deploy",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:seed:deployed": "node dist-seed/prisma/seed.js",
+    "build:seed": "tsc -p tsconfig.seed.json"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.json prisma/seed.ts"
