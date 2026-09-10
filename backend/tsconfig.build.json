@@ -1,0 +1,19 @@
+{
+  // Build config for `nest build`. Deliberately narrower than tsconfig.json.
+  //
+  // tsconfig.json covers src, test AND prisma, because `npm run typecheck` must check all three.
+  // The SHIPPED artifact must contain only src.
+  //
+  // `rootDir` is the load-bearing line. Without it TypeScript infers the root from whichever
+  // included files exist, so the output path changes with the build context: in the Docker image
+  // only src/ and prisma/ are copied, and the inferred root silently moved from `src` to the
+  // project root — turning dist/main.js into dist/src/main.js and breaking `CMD node dist/main.js`
+  // at container start rather than at build time. Stating rootDir makes the layout the same
+  // everywhere, whatever happens to be on disk.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "prisma", "**/*.spec.ts"]
+}

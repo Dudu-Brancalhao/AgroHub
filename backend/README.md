@@ -20,14 +20,6 @@ O frontend será entregue separadamente.
   é recusado.
 - **Proteção contra força bruta** — tentativas repetidas de adivinhar senha são bloqueadas.
 
-### O que o sistema **não** faz (por decisão, não por esquecimento)
-
-- Não envia e-mails. O endereço é validado apenas quanto ao **formato** — o sistema nunca verifica
-  se a caixa postal existe.
-- Não tem recuperação de senha, nem troca de senha.
-- Não tem "logout" no servidor. O token vale até expirar; descartá-lo no cliente não o invalida.
-- Não tem perfis ou permissões — todas as contas têm o mesmo nível de acesso.
-
 ---
 
 ## Como rodar
@@ -329,20 +321,6 @@ preciosismo: em JavaScript, `1000 + 500.11` resulta em `1500.1100000000001`, e u
 ingênua recusaria uma fazenda de 1500,11 ha perfeitamente comum. As áreas são devolvidas como
 **texto** (`"1500.11"`) justamente para o cliente não reintroduzir esse erro ao ler o JSON.
 
-**Na alteração parcial, a regra vale sobre o registro como ele vai ficar.** Uma propriedade com
-total 100 ha, agricultável 60 e vegetação 30 recusa `{"totalArea": 80}` — o número 80 é válido
-sozinho, mas o registro resultante não seria.
-
-### Safras e culturas
-
-Uma propriedade pode ter **mais de uma safra no mesmo ano** — safra e safrinha são reais, e o
-sistema não impede isso.
-
-Uma safra pode ter várias culturas. A mesma cultura não pode ser registrada duas vezes na mesma
-safra, comparando sem diferenciar maiúsculas e acentos: `Soja`, `soja` e `SOJA` são a mesma
-cultura. Já `Soja` e `Soya` são culturas diferentes — é o custo aceito de deixar o nome livre, e
-precisará ser reconciliado antes de qualquer relatório que some área por cultura.
-
 ### Busca
 
 A busca por nome ignora maiúsculas e acentos: procurar por `jose` encontra `José Antônio`.
@@ -449,27 +427,7 @@ Exemplo de resposta:
 }
 ```
 
-## O que fecha e o que não fecha
-
-**`byState` e `byLandUse` fecham exatamente com `totals.hectares`.** Todos os números de uma mesma
-resposta vêm de um único instante do banco, então as somas nunca se contradizem entre si.
-
-**`byCrop` NÃO fecha com `totals.farms` — e não deveria.** Ele conta *plantios*: uma propriedade que
-registrou quatro culturas contribui com quatro. Um cadastro de 3 fazendas pode perfeitamente somar
-12 no gráfico de culturas. São grandezas diferentes e não são comparáveis entre si.
-
-Consequência prática: uma fazenda que planta soja há dez anos pesa dez vezes mais nesse gráfico do
-que dez fazendas no primeiro ano. O gráfico responde "o que se planta por aqui", não "quais fazendas
-plantam o quê".
-
 ## Regras de agrupamento
-
-**Categoria com valor zero nunca aparece.** Uma UF sem propriedades, uma cultura sem registros e uma
-área não classificada igual a zero são simplesmente omitidas. Uma fatia vazia não informa nada e
-aparece no gráfico como sujeira visual.
-
-Na prática: se todas as propriedades classificarem toda a sua área, `byLandUse` devolve duas
-categorias em vez de três.
 
 **Culturas com grafias diferentes viram uma categoria.** `Soja`, `soja` e `SOJA` são a mesma cultura;
 o rótulo exibido é **a grafia mais usada** entre elas. Já `Soja` e `Soya` continuam sendo duas
@@ -502,20 +460,6 @@ sem filtro, então o PostgreSQL faz varredura sequencial de qualquer jeito. Um �
 de escrita em cada cultura cadastrada e não economizaria nada na leitura. Se uma versão futura
 adicionar filtros, o padrão de acesso muda e a decisão deve ser revista com base naquela evidência,
 não nesta.
-
-## Limitações conhecidas
-
-Decisões, não defeitos:
-
-- **Não existe gráfico de área por cultura.** Uma cultura registrada guarda apenas o nome — não há
-  área associada a ela, e quando uma safra tem soja e milho não há como dividir os hectares da
-  propriedade entre as duas. Um gráfico ponderado por área exigiria acrescentar área à cultura, o
-  que é mudança no cadastro de produtores, não aqui.
-- **Nenhum filtro**, por decisão. Toda requisição cobre o cadastro inteiro como ele está.
-- **Sem histórico e sem comparação entre períodos.** O cadastro não guarda histórico, então não há
-  série temporal a exibir.
-- **Produtores não são contados.** O painel responde sobre fazendas e hectares, que foi o que se
-  pediu.
 
 ## Testes deste módulo
 

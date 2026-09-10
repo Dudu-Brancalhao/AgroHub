@@ -15,7 +15,17 @@ COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+RUN npm run build
+
+# Fail HERE, not at container start.
+#
+# `nest build` infers the output layout from the TypeScript config, and the image copies a subset
+# of the repo — so a tsconfig change can move dist/main.js to dist/src/main.js and the build still
+# reports success. The first sign is then `Cannot find module '/app/dist/main.js'` in a crash loop
+# on the deployment target. One assertion turns that into a failed build with an obvious cause.
+RUN test -f dist/main.js || (echo "BUILD ERROR: dist/main.js missing. Actual dist layout:" && ls -R dist | head -40 && exit 1)
+
+RUN npm prune --omit=dev
 
 # --- runtime stage ---------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
