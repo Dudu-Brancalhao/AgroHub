@@ -1,0 +1,326 @@
+openapi: 3.0.3
+
+# Descriptions and summaries are in pt-BR per Constitution Principle VIII: OpenAPI text is
+# stakeholder-facing documentation. Field names, operation ids and this comment are in English
+# because they are source code.
+
+info:
+  title: AgroHub - API de Autenticação
+  version: 1.0.0
+  description: |
+    Cadastro e login de usuários do AgroHub.
+
+    O login devolve um token de acesso que deve ser enviado no cabeçalho `Authorization`
+    no formato `Bearer <token>` nas demais chamadas.
+
+    **Importante:** o token expira e **não pode ser renovado**. Quando expirar, é necessário
+    fazer login novamente com e-mail e senha.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Ambiente de desenvolvimento local
+
+tags:
+  - name: Autenticação
+    description: Cadastro, login e consulta do usuário autenticado
+
+paths:
+  /auth/register:
+    post:
+      tags: [Autenticação]
+      operationId: register
+      summary: Cadastra um novo usuário
+      description: |
+        Cria uma conta com e-mail e senha. A conta fica disponível para login imediatamente —
+        não há etapa de confirmação por e-mail.
+
+        O e-mail é validado apenas quanto ao formato; o sistema não verifica se a caixa postal
+        existe e não envia nenhuma mensagem.
+
+        Limite específico: 5 cadastros por minuto por origem, mais restrito que o limite geral.
+      security: []          # rota pública — @Public()
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Conta criada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Já existe uma conta com este e-mail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 409
+                error: Conflict
+                message: Já existe uma conta cadastrada com este e-mail.
+                path: /api/auth/register
+                timestamp: '2026-09-09T14:32:11.421Z'
+                requestId: 01J7X2K9QF3M8N4P
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/login:
+    post:
+      tags: [Autenticação]
+      operationId: login
+      summary: Autentica um usuário e devolve o token de acesso
+      description: |
+        Valida e-mail e senha e devolve um token de acesso.
+
+        Por segurança, e-mail inexistente, senha incorreta **e dados malformados** produzem
+        exatamente a mesma resposta (401 com a mesma mensagem), sem detalhamento por campo.
+        Assim não é possível descobrir quais e-mails estão cadastrados, nem distinguir
+        "o JSON estava errado" de "as credenciais estavam erradas".
+
+        O motivo técnico da recusa é registrado no log do servidor, associado ao `requestId`
+        devolvido na resposta.
+
+        Após 5 tentativas malsucedidas para o mesmo e-mail em 15 minutos, novas tentativas são
+        recusadas com 429 até a janela expirar.
+      security: []          # rota pública — @Public()
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticação realizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: |
+            Credenciais inválidas. A mesma resposta é devolvida para e-mail não cadastrado,
+            senha incorreta e corpo malformado (FR-009, FR-013a). Nunca contém `details`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                error: Unauthorized
+                message: E-mail ou senha inválidos.
+                path: /api/auth/login
+                timestamp: '2026-09-09T14:33:02.114Z'
+                requestId: 01J7X2M4RB7C1D9E
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/me:
+    get:
+      tags: [Autenticação]
+      operationId: getCurrentUser
+      summary: Retorna os dados do usuário autenticado
+      description: |
+        Devolve os dados da conta associada ao token enviado. Nunca devolve a senha nem
+        qualquer material derivado dela.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dados do usuário autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token devolvido pelo login, enviado como `Authorization: Bearer <token>`.
+
+  schemas:
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false     # FR-006 — campos não previstos são rejeitados
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: E-mail da conta. Maiúsculas e espaços nas pontas são normalizados.
+          example: produtor@agrohub.com.br
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: |
+            Mínimo de 8 caracteres, com pelo menos uma letra e um número.
+            O limite de 72 é contado em **bytes** — acentos e emojis ocupam mais de um byte.
+          example: SenhaSegura1
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: produtor@agrohub.com.br
+        password:
+          type: string
+          example: SenhaSegura1
+
+    UserResponse:
+      type: object
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3f9a1c7e-2b4d-4a19-9c33-88f0e1d2a5b7
+        email:
+          type: string
+          format: email
+          example: produtor@agrohub.com.br
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-09-09T14:32:11.421Z'
+
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: Token de acesso (JWT) a ser enviado nas próximas requisições.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzZjlhIn0.T0tFTg
+        tokenType:
+          type: string
+          enum: [Bearer]
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Validade do token em segundos, a partir de agora.
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    ErrorResponse:
+      type: object
+      description: |
+        Formato único de erro para toda a API. Nunca contém senha, hash de senha, token,
+        stack trace ou qualquer detalhe interno (FR-025) — esses dados vão apenas para o log.
+      required: [statusCode, error, message, path, timestamp]
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        error:
+          type: string
+          description: Identificador técnico do tipo de erro (em inglês).
+          example: Bad Request
+        message:
+          type: string
+          description: Mensagem destinada ao usuário final, em português.
+          example: Os dados enviados são inválidos.
+        details:
+          type: array
+          description: Presente apenas em erros de validação; lista **todos** os campos inválidos de uma vez (FR-013).
+          items:
+            $ref: '#/components/schemas/FieldError'
+        path:
+          type: string
+          example: /api/auth/register
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+          description: Identificador da requisição, para localizar o erro no log.
+          example: 01J7X2K9QF3M8N4P
+
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          example: password
+        message:
+          type: string
+          example: A senha deve ter no mínimo 8 caracteres.
+
+  responses:
+
+    ValidationError:
+      description: Dados inválidos — todos os campos com erro são listados de uma vez
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            statusCode: 400
+            error: Bad Request
+            message: Os dados enviados são inválidos.
+            details:
+              - field: email
+                message: Informe um e-mail válido.
+              - field: password
+                message: A senha deve conter pelo menos uma letra e um número.
+            path: /api/auth/register
+            timestamp: '2026-09-09T14:31:47.002Z'
+            requestId: 01J7X2J8PD2L7M3N
+
+    Unauthenticated:
+      description: Token ausente, expirado ou inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            statusCode: 401
+            error: Unauthorized
+            message: Autenticação necessária.
+            path: /api/auth/me
+            timestamp: '2026-09-09T15:40:19.882Z'
+            requestId: 01J7X4B1TC5F2G8H
+
+    RateLimited:
+      description: |
+        Excesso de tentativas. Devolvido pelo limite por e-mail (5 falhas / 15 min), pelo limite
+        por origem (20 requisições / min) e pelo limite de cadastro (5 / min). A resposta é a
+        mesma nos três casos e **não revela** se as credenciais estavam corretas, nem qual
+        limite foi atingido (FR-023).
+      headers:
+        Retry-After:
+          description: Segundos a aguardar antes de tentar novamente.
+          schema:
+            type: integer
+          example: 743
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            statusCode: 429
+            error: Too Many Requests
+            message: Muitas tentativas. Tente novamente em alguns minutos.
+            path: /api/auth/login
+            timestamp: '2026-09-09T14:38:55.310Z'
+            requestId: 01J7X2W6XH9K4N2Q

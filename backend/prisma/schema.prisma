@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// An account that can sign in. `email` is stored already normalised (trim + lowercase);
+/// the UNIQUE constraint is what actually delivers FR-002 under concurrency, rather than a
+/// check-then-insert in application code.
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+/// One row per FAILED login attempt, counted over a rolling window.
+///
+/// Deliberately has NO foreign key to User: most credential-stuffing traffic targets addresses
+/// that do not exist, and a foreign key would make exactly those attempts unstorable — blinding
+/// the limiter to the attack it most needs to see. It would also turn the table into an
+/// account-existence oracle for anyone with read access (data-model.md).
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  emailKey    String   @map("email_key")
+  attemptedAt DateTime @default(now()) @map("attempted_at")
+
+  @@index([emailKey, attemptedAt])
+  @@map("login_attempts")
+}
+
+/// Backing store for @nestjs/throttler's per-origin limit.
+///
+/// Lives in Postgres rather than Redis because FR-024 requires counters shared across instances
+/// and Redis would be new infrastructure — a Principle VII stack change needing a constitution
+/// amendment first (research.md R-005).
+model ThrottleRecord {
+  key          String    @id
+  hits         Int       @default(0)
+  expiresAt    DateTime  @map("expires_at")
+  blockedUntil DateTime? @map("blocked_until")
+
+  @@index([expiresAt])
+  @@map("throttle_records")
+}
+
+enum DocumentType {
+  CPF
+  CNPJ
+}
+
+/// A person or company that farms.
+///
+/// The document is NOT the primary key: FR-005 allows correcting a mistyped CPF, and a mutable
+/// natural key would cascade through every child row. The UNIQUE constraint is what delivers
+/// FR-008 under concurrency.
+model Producer {
+  id           String       @id @default(uuid())
+  document     String       @unique
+  documentType DocumentType @map("document_type")
+  name         String       @db.VarChar(200)
+  /// Lowercased, diacritics stripped. Exists only to be searched (FR-027). Derived in
+  /// ProducersRepository, the only place that writes the row.
+  nameSearch   String       @map("name_search")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  properties   Property[]
+
+  @@index([nameSearch])
+  @@map("producers")
+}
+
+/// A farm belonging to exactly one producer.
+///
+/// Areas are Decimal(12,2) and MUST be compared in decimal space. In JavaScript,
+/// 1000 + 500.11 is 1500.1100000000001, which wrongly rejects a valid 1500.11 ha farm
+/// (research.md R-001).
+model Property {
+  id             String   @id @default(uuid())
+  producerId     String   @map("producer_id")
+  producer       Producer @relation(fields: [producerId], references: [id], onDelete: Cascade)
+  farmName       String   @map("farm_name") @db.VarChar(200)
+  city           String   @db.VarChar(120)
+  state          String   @db.VarChar(2)
+  totalArea      Decimal  @map("total_area") @db.Decimal(12, 2)
+  arableArea     Decimal  @map("arable_area") @db.Decimal(12, 2)
+  vegetationArea Decimal  @map("vegetation_area") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  crops          Crop[]
+
+  @@index([producerId])
+  @@map("properties")
+}
+
+/// A planting season, shared by the whole registry.
+///
+/// It belongs to nobody: there is one "2021", not one per farm. A property and a harvest are
+/// related ONLY through the crops that connect them.
+///
+/// The year is the identity, so the table is bounded: a valid year runs 1900 to next year, which
+/// makes at most 128 rows possible, ever. It is a reference list rather than a growing table -
+/// which is the clearest confirmation that a season really is a shared fact.
+model Harvest {
+  id        String   @id @default(uuid())
+  year      Int      @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  crops     Crop[]
+
+  @@map("harvests")
+}
+
+/// The junction: which farm planted what, in which season.
+///
+/// The two foreign keys behave differently on purpose, and that asymmetry IS the ownership model:
+///
+///   propertyId -> Cascade   a crop belongs to its farm and dies with it
+///   harvestId  -> Restrict  a harvest belongs to nobody, so cascading here would let one call
+///                           erase a year across every farm in the registry
+///
+/// The composite unique keeps the duplicate rule inside one farm-and-season pair: the same crop
+/// twice for one farm in one season is refused, while two farms in one season, or one farm across
+/// two seasons, are both fine.
+model Crop {
+  id             String   @id @default(uuid())
+  propertyId     String   @map("property_id")
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  harvestId      String   @map("harvest_id")
+  harvest        Harvest  @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  name           String   @db.VarChar(120)
+  nameNormalized String   @map("name_normalized") @db.VarChar(120)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([propertyId, harvestId, nameNormalized])
+  @@index([propertyId])
+  @@index([harvestId])
+  @@map("crops")
+}

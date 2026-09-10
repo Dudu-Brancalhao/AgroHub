@@ -1,0 +1,887 @@
+openapi: 3.0.3
+
+# Descriptions and summaries are in pt-BR per Constitution Principle VIII. Field names, operation
+# ids and this comment are in English because they are source code.
+#
+# EVERY operation here requires a bearer token. There is no `security: []` anywhere in this file:
+# the global guard from feature 001-user-auth denies by default, and none of these routes opt out.
+
+info:
+  title: AgroHub - API de Produtores Rurais
+  version: 1.0.0
+  description: |
+    Cadastro de produtores rurais, suas propriedades, safras e culturas plantadas.
+
+    A hierarquia de posse é **Produtor → Propriedade → Cultura**: cada um desses registros
+    pertence a exatamente um pai e é excluído junto com ele.
+
+    **A safra está fora dessa hierarquia.** Ela é compartilhada por todo o cadastro, identificada
+    pelo ano e registrada uma única vez, por mais fazendas que plantem nela. Quem liga uma fazenda
+    a uma safra é a **cultura**, que carrega as duas (`propertyId` e `harvestId`).
+
+    Na prática isso significa que:
+
+    - a safra é criada em `POST /harvests`, sem informar propriedade;
+    - corrigir o ano de uma safra vale imediatamente para todas as fazendas que plantaram nela;
+    - excluir um produtor ou uma propriedade **não** exclui safra nenhuma, e a resposta dessas
+      exclusões não traz contagem de safras;
+    - excluir uma safra é **recusado** enquanto houver qualquer cultura registrada nela, porque
+      apagá-la em cascata apagaria as culturas de todas as fazendas do cadastro de uma só vez.
+
+    **Atenção:** excluir um produtor exclui também suas propriedades e as culturas dessas
+    propriedades. A operação é permanente e não há desfazer. A resposta informa quantos registros
+    foram removidos.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Ambiente de desenvolvimento local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Produtores
+    description: Cadastro de produtores rurais
+  - name: Propriedades
+    description: Propriedades (fazendas) de um produtor
+  - name: Safras
+    description: Safras compartilhadas por todo o cadastro, identificadas pelo ano
+  - name: Culturas
+    description: O que cada fazenda plantou em cada safra — o vínculo entre as duas
+
+paths:
+  /producers:
+    get:
+      tags: [Produtores]
+      operationId: listProducers
+      summary: Lista produtores com paginação e busca
+      description: |
+        Devolve uma página de produtores e o total de registros que atendem à busca.
+
+        A busca por nome ignora maiúsculas e acentos: procurar por `jose` encontra
+        `José Antônio`. A busca por documento aceita com ou sem pontuação.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+          description: Página desejada, começando em 1.
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          description: Quantidade de registros por página.
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 200 }
+          description: Trecho do nome ou documento do produtor.
+      responses:
+        '200':
+          description: Página de produtores
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagedProducers' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+    post:
+      tags: [Produtores]
+      operationId: createProducer
+      summary: Cadastra um novo produtor
+      description: |
+        O documento é validado pelos dígitos verificadores — não basta ter o tamanho certo.
+        Documentos formados por um único dígito repetido (`111.111.111-11`) são recusados.
+
+        Pontuação é ignorada: `529.982.247-25` e `52998224725` são o mesmo produtor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProducerRequest' }
+      responses:
+        '201':
+          description: Produtor cadastrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producer' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/DocumentConflict' }
+
+  /producers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Produtores]
+      operationId: getProducer
+      summary: Retorna um produtor com suas propriedades e culturas
+      description: |
+        As culturas de cada propriedade vêm agrupadas por safra, apenas para facilitar a leitura.
+        O agrupamento não implica posse: a safra é compartilhada, e o que liga a fazenda a ela é
+        a cultura.
+      responses:
+        '200':
+          description: Produtor com toda a sua árvore de registros
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProducerDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Produtores]
+      operationId: updateProducer
+      summary: Altera nome e/ou documento de um produtor
+      description: |
+        Campos omitidos permanecem inalterados. O documento, se enviado, passa pelas mesmas
+        regras de validade e unicidade do cadastro.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProducerRequest' }
+      responses:
+        '200':
+          description: Produtor atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producer' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DocumentConflict' }
+    delete:
+      tags: [Produtores]
+      operationId: deleteProducer
+      summary: Exclui um produtor e tudo que pertence a ele
+      description: |
+        **Exclusão permanente e em cascata.** Remove o produtor, suas propriedades e as culturas
+        dessas propriedades. Não há desfazer.
+
+        **As safras permanecem.** Uma safra é compartilhada por todo o cadastro e não pertence a
+        este produtor, então a resposta não traz contagem de safras — informar `harvests: 0` daria
+        a entender que a operação chegou a avaliá-las.
+
+        A operação é atômica: ou tudo é removido, ou nada é. A resposta informa quantos registros
+        de cada tipo foram excluídos.
+      responses:
+        '200':
+          description: Produtor e descendentes excluídos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /producers/{producerId}/properties:
+    parameters:
+      - $ref: '#/components/parameters/ProducerId'
+    get:
+      tags: [Propriedades]
+      operationId: listProducerProperties
+      summary: Lista as propriedades de um produtor
+      description: Um produtor sem propriedades devolve uma lista vazia — isso não é erro.
+      responses:
+        '200':
+          description: Propriedades do produtor
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Property' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Propriedades]
+      operationId: createProperty
+      summary: Cadastra uma propriedade para o produtor
+      description: |
+        A soma de área agricultável e área de vegetação **não pode ultrapassar** a área total.
+        Usar exatamente toda a área é permitido; ultrapassar não.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePropertyRequest' }
+      responses:
+        '201':
+          description: Propriedade cadastrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '400': { $ref: '#/components/responses/AreaOrValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /properties/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Propriedades]
+      operationId: getProperty
+      summary: Retorna uma propriedade com suas culturas
+      description: |
+        As culturas vêm agrupadas por safra. O agrupamento é de leitura: a safra não fica abaixo
+        da propriedade, é compartilhada por todo o cadastro.
+      responses:
+        '200':
+          description: Propriedade encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PropertyDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Propriedades]
+      operationId: updateProperty
+      summary: Altera os dados de uma propriedade
+      description: |
+        Campos omitidos permanecem inalterados, **mas a regra de áreas é verificada sobre o
+        registro como ele ficará depois da alteração**.
+
+        Exemplo: uma propriedade com total 100 ha, agricultável 60 ha e vegetação 30 ha não aceita
+        `{"totalArea": 80}`, porque 60 + 30 ultrapassaria os 80 ha resultantes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePropertyRequest' }
+      responses:
+        '200':
+          description: Propriedade atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '400': { $ref: '#/components/responses/AreaOrValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Propriedades]
+      operationId: deleteProperty
+      summary: Exclui uma propriedade e suas culturas
+      description: |
+        Exclusão permanente e em cascata. O produtor permanece.
+
+        **As safras também permanecem**, pelo mesmo motivo de `DELETE /producers/{id}`: elas são
+        compartilhadas e não pertencem a esta propriedade. A resposta não traz contagem de safras.
+      responses:
+        '200':
+          description: Propriedade e culturas excluídas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /harvests:
+    get:
+      tags: [Safras]
+      operationId: listHarvests
+      summary: Lista as safras disponíveis
+      description: |
+        Cada safra aparece uma única vez, independentemente de quantas fazendas plantaram nela.
+        A lista é naturalmente curta: um ano válido vai de 1900 até o ano que vem, então existem
+        no máximo 128 safras possíveis em todo o cadastro.
+      responses:
+        '200':
+          description: Safras cadastradas, da mais recente para a mais antiga
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Harvest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Safras]
+      operationId: createHarvest
+      summary: Cadastra uma safra
+      description: |
+        A safra é criada uma vez para todo o cadastro. **Não se informa propriedade**: uma safra
+        não pertence a ninguém, e é a cultura que liga a fazenda à safra.
+
+        O ano identifica a safra, então não é possível cadastrar duas vezes o mesmo ano. Uma
+        consequência aceita disso é que safra e safrinha do mesmo ano-calendário não são
+        representáveis como duas safras.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHarvestRequest' }
+      responses:
+        '201':
+          description: Safra cadastrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/HarvestYearConflict' }
+
+  /harvests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Safras]
+      operationId: getHarvest
+      summary: Retorna uma safra
+      responses:
+        '200':
+          description: Safra encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Safras]
+      operationId: updateHarvest
+      summary: Corrige o ano de uma safra
+      description: |
+        A correção vale imediatamente para **todas** as fazendas que plantaram nesta safra — é
+        esse o ganho de a safra ser compartilhada. Nenhum registro de propriedade é tocado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHarvestRequest' }
+      responses:
+        '200':
+          description: Safra atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HarvestYearConflict' }
+    delete:
+      tags: [Safras]
+      operationId: deleteHarvest
+      summary: Exclui uma safra que não está em uso
+      description: |
+        **Recusada** enquanto houver qualquer cultura registrada nesta safra, e a resposta informa
+        quantas estão impedindo.
+
+        A recusa é proposital e é a regra mais consequente deste cadastro: uma safra é
+        compartilhada, então apagá-la em cascata apagaria as culturas de **todas** as fazendas do
+        cadastro de uma só vez. Para excluir, remova antes as culturas registradas nela.
+      responses:
+        '200':
+          description: Safra excluída
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HarvestInUse' }
+
+  /properties/{propertyId}/crops:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [Culturas]
+      operationId: listPropertyCrops
+      summary: Lista o que esta fazenda plantou, em todas as safras
+      description: |
+        Agrupadas por safra, da mais antiga para a mais recente. Uma fazenda que nunca plantou
+        devolve uma lista vazia — isso não é erro.
+      responses:
+        '200':
+          description: Culturas da propriedade, agrupadas por safra
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HarvestWithCrops' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Culturas]
+      operationId: createCrop
+      summary: Registra uma cultura plantada por esta fazenda
+      description: |
+        A cultura é o vínculo entre a fazenda e a safra: ela carrega as duas.
+
+        **A propriedade vem no caminho** porque é ela que possui a cultura — excluir a propriedade
+        exclui suas culturas. **A safra vem no corpo** porque é compartilhada e não possui nada.
+        É a única operação deste cadastro em que um `404` pode vir de um campo do corpo
+        (`harvestId` inexistente) e não do caminho.
+
+        A mesma cultura não pode ser registrada duas vezes para a **mesma fazenda** na **mesma
+        safra**. A comparação ignora maiúsculas e acentos, então `Soja` e `soja` são a mesma
+        cultura; `Soja` e `Soya` não são. Já a mesma cultura em safras diferentes, ou em fazendas
+        diferentes, é permitida.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCropRequest' }
+      responses:
+        '201':
+          description: Cultura registrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Crop' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/CropConflict' }
+
+  /harvests/{harvestId}/crops:
+    parameters:
+      - $ref: '#/components/parameters/HarvestId'
+    get:
+      tags: [Culturas]
+      operationId: listHarvestCrops
+      summary: Lista o que foi plantado nesta safra, em todas as fazendas
+      description: |
+        Cada item informa a fazenda em `propertyId`, já que a safra é compartilhada e pode ter
+        plantios de vários produtores.
+      responses:
+        '200':
+          description: Culturas da safra
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Crop' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /crops/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    delete:
+      tags: [Culturas]
+      operationId: deleteCrop
+      summary: Exclui uma cultura
+      responses:
+        '200':
+          description: Cultura excluída
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token devolvido por `POST /auth/login`.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+    ProducerId:
+      name: producerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+    PropertyId:
+      name: propertyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+    HarvestId:
+      name: harvestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+
+    CreateProducerRequest:
+      type: object
+      additionalProperties: false
+      required: [document, name]
+      properties:
+        document:
+          type: string
+          description: CPF (11 dígitos) ou CNPJ (14 dígitos). Pontuação opcional.
+          example: '529.982.247-25'
+        name:
+          type: string
+          maxLength: 200
+          example: José Antônio de Almeida
+
+    UpdateProducerRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        document: { type: string, example: '11.222.333/0001-81' }
+        name: { type: string, maxLength: 200, example: José A. de Almeida }
+
+    Producer:
+      type: object
+      required: [id, document, documentType, name, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        document:
+          type: string
+          description: Armazenado apenas com dígitos.
+          example: '52998224725'
+        documentType: { type: string, enum: [CPF, CNPJ] }
+        name: { type: string, example: José Antônio de Almeida }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProducerDetail:
+      allOf:
+        - $ref: '#/components/schemas/Producer'
+        - type: object
+          required: [properties]
+          properties:
+            properties:
+              type: array
+              description: Lista vazia quando o produtor não tem propriedades.
+              items: { $ref: '#/components/schemas/PropertyDetail' }
+
+    PagedProducers:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Producer' }
+        total:
+          type: integer
+          description: Total de registros que atendem à busca, além da página atual.
+          example: 137
+        page: { type: integer, example: 1 }
+        pageSize: { type: integer, example: 20 }
+
+    CreatePropertyRequest:
+      type: object
+      additionalProperties: false
+      required: [farmName, city, state, totalArea, arableArea, vegetationArea]
+      properties:
+        farmName: { type: string, maxLength: 200, example: Fazenda Santa Helena }
+        city: { type: string, maxLength: 120, example: Uberaba }
+        state:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: Sigla da unidade federativa.
+          example: MG
+        totalArea:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+          multipleOf: 0.01
+          description: Área total em hectares, com até 2 casas decimais.
+          example: 1500.11
+        arableArea:
+          type: number
+          format: double
+          minimum: 0
+          multipleOf: 0.01
+          description: Área agricultável em hectares.
+          example: 1000
+        vegetationArea:
+          type: number
+          format: double
+          minimum: 0
+          multipleOf: 0.01
+          description: Área de vegetação em hectares.
+          example: 500.11
+
+    UpdatePropertyRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        farmName: { type: string, maxLength: 200 }
+        city: { type: string, maxLength: 120 }
+        state: { type: string, minLength: 2, maxLength: 2 }
+        totalArea: { type: number, format: double, minimum: 0, multipleOf: 0.01 }
+        arableArea: { type: number, format: double, minimum: 0, multipleOf: 0.01 }
+        vegetationArea: { type: number, format: double, minimum: 0, multipleOf: 0.01 }
+
+    Property:
+      type: object
+      required:
+        [id, producerId, farmName, city, state, totalArea, arableArea, vegetationArea, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        producerId: { type: string, format: uuid }
+        farmName: { type: string, example: Fazenda Santa Helena }
+        city: { type: string, example: Uberaba }
+        state: { type: string, example: MG }
+        totalArea:
+          type: string
+          description: Devolvido como string para preservar a precisão decimal exata.
+          example: '1500.11'
+        arableArea: { type: string, example: '1000.00' }
+        vegetationArea: { type: string, example: '500.11' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PropertyDetail:
+      allOf:
+        - $ref: '#/components/schemas/Property'
+        - type: object
+          required: [harvests]
+          properties:
+            harvests:
+              type: array
+              description: |
+                Safras em que esta fazenda plantou, com as culturas de cada uma, da mais antiga
+                para a mais recente. É um agrupamento de leitura, montado a partir das culturas —
+                a safra não pertence à propriedade. Lista vazia quando a fazenda nunca plantou.
+              items: { $ref: '#/components/schemas/HarvestWithCrops' }
+
+    CreateHarvestRequest:
+      type: object
+      additionalProperties: false
+      required: [year]
+      properties:
+        year:
+          type: integer
+          minimum: 1900
+          description: |
+            Ano da safra. O limite superior é o ano corrente mais um, calculado a cada requisição.
+            O ano identifica a safra em todo o cadastro: não existem duas safras com o mesmo ano.
+          example: 2021
+
+    Harvest:
+      type: object
+      description: |
+        Uma safra compartilhada. **Não há campo de propriedade aqui, e essa ausência é o ponto**:
+        a safra não pertence a ninguém. Quem liga uma fazenda a uma safra é a cultura.
+      required: [id, year, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        year:
+          type: integer
+          description: Identifica a safra. Único em todo o cadastro.
+          example: 2021
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    HarvestWithCrops:
+      type: object
+      description: |
+        O que uma fazenda plantou em uma safra. É a forma agrupada usada apenas em respostas de
+        leitura; não é um registro armazenado.
+      required: [harvestId, year, crops]
+      properties:
+        harvestId: { type: string, format: uuid }
+        year: { type: integer, example: 2021 }
+        crops:
+          type: array
+          items: { $ref: '#/components/schemas/Crop' }
+
+    CreateCropRequest:
+      type: object
+      additionalProperties: false
+      required: [harvestId, name]
+      properties:
+        harvestId:
+          type: string
+          format: uuid
+          description: |
+            Safra compartilhada em que esta fazenda plantou. Deve existir: cadastre-a antes em
+            `POST /harvests`. A propriedade não vai aqui — ela vem no caminho.
+          example: 7c2b1a9e-1111-4a19-9c33-88f0e1d2a5b7
+        name: { type: string, maxLength: 120, example: Soja }
+
+    Crop:
+      type: object
+      description: |
+        O vínculo entre uma fazenda e uma safra. Carrega as duas chaves, e é por isso que uma
+        contagem de fazendas a partir daqui precisa de `COUNT(DISTINCT property_id)`: a mesma
+        fazenda aparece uma vez por safra em que plantou aquela cultura.
+      required: [id, propertyId, harvestId, name, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        propertyId:
+          type: string
+          format: uuid
+          description: A fazenda que plantou. Informado diretamente, sem percorrer a safra.
+        harvestId: { type: string, format: uuid }
+        name:
+          type: string
+          description: Devolvido como o usuário digitou.
+          example: Soja
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    DeletionReport:
+      type: object
+      description: |
+        Quantos registros a exclusão removeu, por tipo. Permite ao chamador ver o alcance real
+        do que acabou de excluir.
+
+        Cada chave só aparece quando a operação de fato considerou aquele tipo. Excluir um
+        produtor ou uma propriedade **não** devolve `harvests`: a safra é compartilhada e não fica
+        abaixo de nenhum dos dois, então informar `harvests: 0` daria a entender que a operação
+        chegou a avaliá-la. `harvests` aparece apenas em `DELETE /harvests/{id}`.
+      required: [deleted]
+      properties:
+        deleted:
+          type: object
+          properties:
+            producers: { type: integer, example: 1 }
+            properties: { type: integer, example: 3 }
+            crops: { type: integer, example: 89 }
+            harvests:
+              type: integer
+              description: Presente apenas ao excluir a própria safra.
+              example: 1
+          example:
+            producers: 1
+            properties: 3
+            crops: 89
+
+    ErrorResponse:
+      type: object
+      description: |
+        Mesmo formato de erro usado em toda a API. Nunca contém dados internos nem o documento
+        completo do produtor.
+      required: [statusCode, error, message, path, timestamp, requestId]
+      properties:
+        statusCode: { type: integer, example: 400 }
+        error: { type: string, example: Bad Request }
+        message: { type: string, example: Os dados enviados são inválidos. }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, example: document }
+              message: { type: string, example: Informe um CPF ou CNPJ válido. }
+        path: { type: string, example: /api/producers }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+
+  responses:
+
+    ValidationError:
+      description: Dados inválidos — todos os campos com erro são listados de uma vez
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 400
+            error: Bad Request
+            message: Os dados enviados são inválidos.
+            details:
+              - field: document
+                message: Informe um CPF ou CNPJ válido.
+              - field: name
+                message: O nome é obrigatório.
+            path: /api/producers
+            timestamp: '2026-09-10T14:31:47.002Z'
+            requestId: 01J7X2J8PD2L7M3N
+
+    AreaOrValidationError:
+      description: |
+        Dados inválidos, incluindo a violação da regra de áreas. No caso da regra de áreas o erro
+        aparece em `details` associado ao campo que a rompeu.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 400
+            error: Bad Request
+            message: Os dados enviados são inválidos.
+            details:
+              - field: arableArea
+                message: A soma da área agricultável e da área de vegetação não pode ultrapassar a área total.
+            path: /api/producers/3f9a1c7e-2b4d-4a19-9c33-88f0e1d2a5b7/properties
+            timestamp: '2026-09-10T14:33:02.114Z'
+            requestId: 01J7X2M4RB7C1D9E
+
+    Unauthenticated:
+      description: Token ausente, expirado ou inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 401
+            error: Unauthorized
+            message: Autenticação necessária.
+            path: /api/producers
+            timestamp: '2026-09-10T15:40:19.882Z'
+            requestId: 01J7X4B1TC5F2G8H
+
+    NotFound:
+      description: |
+        O registro informado não existe. Devolvido também quando o pai indicado no caminho não
+        existe — cadastrar uma propriedade para um produtor inexistente, por exemplo.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 404
+            error: Not Found
+            message: Produtor não encontrado.
+            path: /api/producers/3f9a1c7e-2b4d-4a19-9c33-88f0e1d2a5b7
+            timestamp: '2026-09-10T15:42:01.100Z'
+            requestId: 01J7X4C2UD6G3H9J
+
+    DocumentConflict:
+      description: Já existe um produtor com este CPF/CNPJ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 409
+            error: Conflict
+            message: Já existe um produtor cadastrado com este documento.
+            path: /api/producers
+            timestamp: '2026-09-10T14:32:11.421Z'
+            requestId: 01J7X2K9QF3M8N4P
+
+    CropConflict:
+      description: |
+        Esta cultura já está registrada para esta fazenda nesta safra. O conflito é por
+        `(fazenda, safra, cultura)`: a mesma cultura em outra fazenda, ou na mesma fazenda em
+        outra safra, é aceita.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 409
+            error: Conflict
+            message: Esta cultura já está registrada para esta fazenda nesta safra.
+            path: /api/properties/3f9a1c7e-2b4d-4a19-9c33-88f0e1d2a5b7/crops
+            timestamp: '2026-09-10T14:35:22.010Z'
+            requestId: 01J7X2P5SC8D2E1F
+
+    HarvestYearConflict:
+      description: Já existe uma safra cadastrada para este ano
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 409
+            error: Conflict
+            message: Já existe uma safra cadastrada para o ano 2021.
+            path: /api/harvests
+            timestamp: '2026-09-10T14:36:04.517Z'
+            requestId: 01J7X2Q7TD9E3F2G
+
+    HarvestInUse:
+      description: |
+        A safra tem culturas registradas e não pode ser excluída. A mensagem informa quantas estão
+        impedindo. Remova-as antes, ou mantenha a safra.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 409
+            error: Conflict
+            message: 'Não é possível excluir esta safra: existem 12 culturas registradas nela.'
+            path: /api/harvests/7c2b1a9e-1111-4a19-9c33-88f0e1d2a5b7
+            timestamp: '2026-09-10T14:37:19.884Z'
+            requestId: 01J7X2R8UE1F4G3H

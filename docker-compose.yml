@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agrohub
+      POSTGRES_PASSWORD: agrohub
+      POSTGRES_DB: agrohub
+    ports:
+      # Host port is configurable so the stack can run alongside another project's Postgres.
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - agrohub-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U agrohub -d agrohub']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://agrohub:agrohub@postgres:5432/agrohub
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  agrohub-pgdata:

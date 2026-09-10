@@ -1,0 +1,443 @@
+openapi: 3.0.3
+
+# Only the operations this feature CHANGES are described here. Producers, properties, the dashboard
+# and authentication keep the contracts documented in features 001-003.
+#
+# Descriptions in pt-BR per Constitution Principle VIII. Every operation requires a bearer token;
+# there is no `security: []` anywhere in this file.
+
+info:
+  title: AgroHub - Safras e Culturas (remodelagem)
+  version: 2.0.0
+  description: |
+    Uma safra passa a ser um registro **compartilhado**: existe uma única "2021" para todo o
+    cadastro, e não uma por fazenda.
+
+    A cultura passa a ser o registro que liga as duas pontas — ela informa **qual fazenda** plantou
+    **o quê** em **qual safra**.
+
+    ## O que mudou para quem consome a API
+
+    | Antes | Agora |
+    |-------|-------|
+    | `POST /properties/{id}/harvests` | `POST /harvests` |
+    | `POST /harvests/{id}/crops` | `POST /properties/{id}/crops`, com `harvestId` no corpo |
+    | Excluir uma safra apagava as culturas dela | Excluir uma safra é **recusado** enquanto houver culturas |
+    | Excluir produtor/propriedade informava `harvests` | O relatório não traz mais `harvests` |
+
+    ## O que NÃO mudou
+
+    O painel continua exatamente como está: o gráfico por cultura conta **plantios**, e uma fazenda
+    que plantou soja em 2021 e em 2022 continua contribuindo com dois registros.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Ambiente de desenvolvimento local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Safras
+    description: Safras compartilhadas por todo o cadastro
+  - name: Culturas
+    description: O que cada fazenda plantou em cada safra
+
+paths:
+  /harvests:
+    get:
+      tags: [Safras]
+      operationId: listHarvests
+      summary: Lista as safras disponíveis
+      description: |
+        Cada safra aparece uma única vez, independentemente de quantas fazendas plantaram nela.
+
+        A lista é naturalmente curta: um ano válido vai de 1900 até o ano que vem, então existem no
+        máximo 128 safras possíveis.
+      responses:
+        '200':
+          description: Safras cadastradas, da mais recente para a mais antiga
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Harvest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+    post:
+      tags: [Safras]
+      operationId: createHarvest
+      summary: Cadastra uma safra
+      description: |
+        A safra é criada **uma vez para todo o cadastro**. Não se informa propriedade: uma safra não
+        pertence a ninguém.
+
+        O ano identifica a safra, então não é possível cadastrar duas vezes o mesmo ano.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHarvestRequest' }
+      responses:
+        '201':
+          description: Safra cadastrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409':
+          description: Já existe uma safra para este ano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                statusCode: 409
+                error: Conflict
+                message: Já existe uma safra cadastrada para o ano 2021.
+                path: /api/harvests
+                timestamp: '2026-09-10T14:32:11.421Z'
+                requestId: 01J7X2K9QF3M8N4P
+
+  /harvests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Safras]
+      operationId: getHarvest
+      summary: Retorna uma safra
+      responses:
+        '200':
+          description: Safra encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Safras]
+      operationId: updateHarvest
+      summary: Corrige o ano de uma safra
+      description: |
+        A correção vale imediatamente para **todas** as fazendas que plantaram nesta safra — é esse
+        o ganho de a safra ser compartilhada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHarvestRequest' }
+      responses:
+        '200':
+          description: Safra atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Harvest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Já existe outra safra para este ano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    delete:
+      tags: [Safras]
+      operationId: deleteHarvest
+      summary: Exclui uma safra que não está em uso
+      description: |
+        **Recusada enquanto houver qualquer cultura registrada nesta safra**, e a resposta informa
+        quantas estão impedindo.
+
+        A recusa é proposital. Uma safra é compartilhada: apagá-la em cascata apagaria as culturas
+        de **todas** as fazendas do cadastro de uma só vez — alcance muito maior do que o da safra
+        por propriedade que ela substitui. Para excluir a safra, é preciso remover antes as culturas
+        deliberadamente.
+      responses:
+        '200':
+          description: Safra excluída
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+              example:
+                deleted: { harvests: 1 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: A safra tem culturas registradas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                statusCode: 409
+                error: Conflict
+                message: Não é possível excluir esta safra: existem 42 culturas registradas nela.
+                path: /api/harvests/7c2b1a9e-1111-4a19-9c33-88f0e1d2a5b7
+                timestamp: '2026-09-10T14:35:22.010Z'
+                requestId: 01J7X2P5SC8D2E1F
+
+  /harvests/{id}/crops:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Culturas]
+      operationId: listHarvestCrops
+      summary: Lista o que foi plantado nesta safra, em todas as fazendas
+      description: |
+        Cada item informa a fazenda, já que a safra é compartilhada e a mesma cultura pode aparecer
+        para várias propriedades.
+      responses:
+        '200':
+          description: Culturas da safra
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Crop' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /properties/{propertyId}/crops:
+    parameters:
+      - name: propertyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Culturas]
+      operationId: listPropertyCrops
+      summary: Lista o que esta fazenda plantou, em todas as safras
+      responses:
+        '200':
+          description: Culturas da propriedade, agrupadas por safra
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HarvestWithCrops' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    post:
+      tags: [Culturas]
+      operationId: createCrop
+      summary: Registra uma cultura plantada por esta fazenda
+      description: |
+        A propriedade vem no caminho porque é ela que **possui** a cultura — excluir a propriedade
+        exclui suas culturas. A safra vem no corpo porque é compartilhada e não possui nada.
+
+        A mesma cultura não pode ser registrada duas vezes para a **mesma fazenda na mesma safra**;
+        a comparação ignora maiúsculas e acentos. Já a mesma cultura em safras diferentes, ou em
+        fazendas diferentes, é permitida.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCropRequest' }
+      responses:
+        '201':
+          description: Cultura registrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Crop' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404':
+          description: |
+            A propriedade informada no caminho, ou a safra informada no corpo, não existe.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                statusCode: 404
+                error: Not Found
+                message: Safra não encontrada.
+                path: /api/properties/3f9a1c7e-2b4d-4a19-9c33-88f0e1d2a5b7/crops
+                timestamp: '2026-09-10T14:33:02.114Z'
+                requestId: 01J7X2M4RB7C1D9E
+        '409':
+          description: Esta cultura já está registrada para esta fazenda nesta safra
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /crops/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    delete:
+      tags: [Culturas]
+      operationId: deleteCrop
+      summary: Exclui uma cultura
+      responses:
+        '200':
+          description: Cultura excluída
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionReport' }
+              example:
+                deleted: { crops: 1 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token devolvido por `POST /auth/login`.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+
+    CreateHarvestRequest:
+      type: object
+      additionalProperties: false
+      required: [year]
+      properties:
+        year:
+          type: integer
+          minimum: 1900
+          description: Ano da safra. O limite superior é o ano corrente mais um.
+          example: 2021
+
+    Harvest:
+      type: object
+      required: [id, year, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        year: { type: integer, example: 2021 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      description: |
+        Não há campo de propriedade: uma safra não pertence a nenhuma fazenda.
+
+    CreateCropRequest:
+      type: object
+      additionalProperties: false
+      required: [harvestId, name]
+      properties:
+        harvestId:
+          type: string
+          format: uuid
+          description: Safra em que esta fazenda plantou. Deve existir.
+        name:
+          type: string
+          maxLength: 120
+          example: Soja
+
+    Crop:
+      type: object
+      required: [id, propertyId, harvestId, name, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        propertyId:
+          type: string
+          format: uuid
+          description: A fazenda que plantou. Informado diretamente, sem precisar percorrer a safra.
+        harvestId: { type: string, format: uuid }
+        name:
+          type: string
+          description: Devolvido como o usuário digitou.
+          example: Soja
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    HarvestWithCrops:
+      type: object
+      description: As culturas de uma fazenda em uma safra, agrupadas para leitura.
+      required: [harvestId, year, crops]
+      properties:
+        harvestId: { type: string, format: uuid }
+        year: { type: integer, example: 2021 }
+        crops:
+          type: array
+          items: { $ref: '#/components/schemas/Crop' }
+
+    DeletionReport:
+      type: object
+      description: |
+        Quantos registros a exclusão removeu, por tipo.
+
+        **Mudança de contrato:** `DELETE /producers/{id}` e `DELETE /properties/{id}` **não trazem
+        mais** a chave `harvests` — safras não ficam mais abaixo de produtores nem de propriedades,
+        então não há o que informar.
+      required: [deleted]
+      properties:
+        deleted:
+          type: object
+          properties:
+            producers: { type: integer, example: 1 }
+            properties: { type: integer, example: 3 }
+            harvests: { type: integer, example: 1 }
+            crops: { type: integer, example: 89 }
+
+    ErrorResponse:
+      type: object
+      required: [statusCode, error, message, path, timestamp, requestId]
+      properties:
+        statusCode: { type: integer, example: 409 }
+        error: { type: string, example: Conflict }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+        path: { type: string }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+
+  responses:
+
+    ValidationError:
+      description: Dados inválidos — todos os campos com erro são listados de uma vez
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 400
+            error: Bad Request
+            message: Os dados enviados são inválidos.
+            details:
+              - field: year
+                message: O ano da safra deve estar entre 1900 e 2027.
+            path: /api/harvests
+            timestamp: '2026-09-10T14:31:47.002Z'
+            requestId: 01J7X2J8PD2L7M3N
+
+    Unauthenticated:
+      description: Token ausente, expirado ou inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 401
+            error: Unauthorized
+            message: Autenticação necessária.
+            path: /api/harvests
+            timestamp: '2026-09-10T15:40:19.882Z'
+            requestId: 01J7X4B1TC5F2G8H
+
+    NotFound:
+      description: O registro informado não existe
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 404
+            error: Not Found
+            message: Safra não encontrada.
+            path: /api/harvests/00000000-0000-0000-0000-000000000000
+            timestamp: '2026-09-10T15:42:01.100Z'
+            requestId: 01J7X4C2UD6G3H9J

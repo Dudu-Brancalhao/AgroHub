@@ -1,0 +1,269 @@
+openapi: 3.0.3
+
+# Descriptions and summaries are in pt-BR per Constitution Principle VIII. Field names, keys and
+# this comment are in English because they are source code.
+#
+# One operation, read-only, requiring a bearer token like every other route in this API.
+
+info:
+  title: AgroHub - API do Painel
+  version: 1.0.0
+  description: |
+    Visão consolidada do cadastro: quantas fazendas existem, quantos hectares somam, e três
+    distribuições prontas para desenhar como gráfico de pizza.
+
+    Não há filtros nesta versão — nem por data, nem por período, nem por estado. Cada requisição
+    reflete o cadastro no momento em que foi atendida.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Ambiente de desenvolvimento local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Painel
+    description: Números consolidados do cadastro de produtores rurais
+
+paths:
+  /dashboard:
+    get:
+      tags: [Painel]
+      operationId: getDashboard
+      summary: Retorna os números consolidados do cadastro
+      description: |
+        Devolve, em uma única chamada, tudo que o painel precisa.
+
+        ## O que cada número significa
+
+        - **`totals.farms`** — quantidade de propriedades cadastradas.
+        - **`totals.hectares`** — soma da área total de todas as propriedades.
+        - **`byState`** — **hectares** por unidade federativa.
+        - **`byCrop`** — **quantidade de registros de cultura**, não hectares.
+        - **`byLandUse`** — **hectares** divididos entre área agricultável, vegetação e área não
+          classificada.
+
+        Cada distribuição informa a própria unidade no campo `unit`, para que nunca seja preciso
+        adivinhar se um número é hectare ou contagem.
+
+        ## Um aviso importante
+
+        **`byState` e `byLandUse` fecham exatamente com `totals.hectares`.** Todos os números de
+        uma mesma resposta vêm de um único instante do banco, então as somas nunca se contradizem.
+        `byCrop` não entra nessa conta: conta registros, não hectares, como diz o próprio `unit`.
+
+        ## Regras de agrupamento
+
+        - Categorias com valor zero **nunca** aparecem. Uma UF sem propriedades, uma cultura sem
+          registros e uma área não classificada igual a zero são simplesmente omitidas.
+        - Culturas com grafias diferentes viram **uma** categoria: `Soja`, `soja` e `SOJA` são a
+          mesma cultura. O rótulo exibido é a grafia mais usada. Já `Soja` e `Soya` continuam sendo
+          duas culturas diferentes.
+        - As categorias vêm ordenadas do maior para o menor valor, com desempate pelo `key`, de
+          modo que duas chamadas iguais devolvem exatamente a mesma ordem.
+        - Uma propriedade sem safra ou sem cultura **conta** em `totals` e em `byState`, mas não
+          aparece em `byCrop`.
+
+        ## Cadastro vazio
+
+        Devolve `200` com `farms: 0`, `hectares: "0.00"` e listas vazias. Cadastro vazio é um
+        estado válido, não um erro.
+      responses:
+        '200':
+          description: Números consolidados do cadastro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+              examples:
+                comDados:
+                  summary: Cadastro com quatro propriedades
+                  value:
+                    totals:
+                      farms: 4
+                      hectares: '1725.47'
+                    byState:
+                      unit: hectares
+                      categories:
+                        - { key: MG, label: MG, value: '1200.11' }
+                        - { key: SP, label: SP, value: '500.36' }
+                        - { key: BA, label: BA, value: '25.00' }
+                    byCrop:
+                      unit: count
+                      categories:
+                        - { key: soja, label: Soja, value: 3 }
+                        - { key: milho, label: Milho, value: 2 }
+                    byLandUse:
+                      unit: hectares
+                      categories:
+                        - { key: arable, label: Área agricultável, value: '1200.36' }
+                        - { key: vegetation, label: Vegetação, value: '350.00' }
+                        - { key: unclassified, label: Área não classificada, value: '175.11' }
+                cadastroVazio:
+                  summary: Cadastro sem nenhuma propriedade
+                  value:
+                    totals:
+                      farms: 0
+                      hectares: '0.00'
+                    byState: { unit: hectares, categories: [] }
+                    byCrop: { unit: count, categories: [] }
+                    byLandUse: { unit: hectares, categories: [] }
+                terraTodaClassificada:
+                  summary: Toda a terra classificada — a fatia "não classificada" desaparece
+                  value:
+                    totals:
+                      farms: 1
+                      hectares: '100.00'
+                    byState:
+                      unit: hectares
+                      categories:
+                        - { key: MG, label: MG, value: '100.00' }
+                    byCrop: { unit: count, categories: [] }
+                    byLandUse:
+                      unit: hectares
+                      categories:
+                        - { key: arable, label: Área agricultável, value: '60.00' }
+                        - { key: vegetation, label: Vegetação, value: '40.00' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token devolvido por `POST /auth/login`.
+
+  schemas:
+
+    DashboardSummary:
+      type: object
+      required: [totals, byState, byCrop, byLandUse]
+      properties:
+        totals:
+          $ref: '#/components/schemas/Totals'
+        byState:
+          allOf:
+            - $ref: '#/components/schemas/Breakdown'
+            - description: Hectares por unidade federativa. Fecha exatamente com `totals.hectares`.
+        byCrop:
+          allOf:
+            - $ref: '#/components/schemas/Breakdown'
+            - description: |
+                Quantidade de registros de cultura. **Não fecha** com `totals.farms` — conta
+                plantios, e uma mesma propriedade pode contribuir várias vezes.
+        byLandUse:
+          allOf:
+            - $ref: '#/components/schemas/Breakdown'
+            - description: |
+                Hectares por uso do solo. Fecha exatamente com `totals.hectares`. A categoria
+                `unclassified` só aparece quando sobra área não classificada.
+
+    Totals:
+      type: object
+      required: [farms, hectares]
+      properties:
+        farms:
+          type: integer
+          minimum: 0
+          description: Quantidade de propriedades cadastradas.
+          example: 4
+        hectares:
+          type: string
+          description: |
+            Soma da área total de todas as propriedades, em hectares, com 2 casas decimais.
+
+            Devolvido como **texto** para preservar a precisão exata: `1725.47` interpretado como
+            número de ponto flutuante não é exatamente 1725,47, e qualquer conta feita no cliente
+            reintroduziria o erro que o servidor acabou de evitar.
+          example: '1725.47'
+
+    Breakdown:
+      type: object
+      required: [unit, categories]
+      properties:
+        unit:
+          type: string
+          enum: [hectares, count]
+          description: |
+            O que o `value` de cada categoria representa. Declarado explicitamente para que um
+            consumidor nunca precise adivinhar se `300` são 300 hectares ou 300 registros.
+        categories:
+          type: array
+          description: |
+            Ordenadas do maior para o menor valor, com desempate pelo `key`. Lista vazia quando
+            não há nada a exibir. Nunca contém categoria com valor zero.
+          items:
+            $ref: '#/components/schemas/Category'
+
+    Category:
+      type: object
+      required: [key, label, value]
+      properties:
+        key:
+          type: string
+          description: |
+            Identificador estável da categoria. Para estados é a sigla da UF (`MG`); para culturas
+            é a forma normalizada do nome (`soja`); para uso do solo é `arable`, `vegetation` ou
+            `unclassified`. Use este campo para agrupar; use `label` para exibir.
+          example: soja
+        label:
+          type: string
+          description: |
+            Texto para exibição. Para culturas é a grafia mais usada entre as variantes do mesmo
+            nome; para uso do solo é o rótulo em português.
+          example: Soja
+        value:
+          oneOf:
+            - type: string
+            - type: integer
+          description: |
+            Hectares (texto, 2 casas decimais) quando `unit` é `hectares`; contagem (inteiro)
+            quando `unit` é `count`.
+          example: '1200.11'
+
+    ErrorResponse:
+      type: object
+      required: [statusCode, error, message, path, timestamp, requestId]
+      properties:
+        statusCode: { type: integer, example: 401 }
+        error: { type: string, example: Unauthorized }
+        message: { type: string, example: Autenticação necessária. }
+        path: { type: string, example: /api/dashboard }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+
+  responses:
+
+    Unauthenticated:
+      description: Token ausente, expirado ou inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 401
+            error: Unauthorized
+            message: Autenticação necessária.
+            path: /api/dashboard
+            timestamp: '2026-09-10T15:40:19.882Z'
+            requestId: 01J7X4B1TC5F2G8H
+
+    InternalError:
+      description: |
+        Falha ao montar o painel. O motivo fica registrado no log do servidor, associado ao
+        `requestId` devolvido — a resposta nunca expõe detalhe interno.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 500
+            error: Internal Server Error
+            message: Erro interno. Tente novamente mais tarde.
+            path: /api/dashboard
+            timestamp: '2026-09-10T15:41:02.310Z'
+            requestId: 01J7X4C9WE2H5K7M
