@@ -32,17 +32,25 @@ describe('PieChart', () => {
 
   /**
    * The rule that discharges the palette's contrast warning: identity is never colour alone.
-   * Every slice repeats as label + value + share in text.
+   * Every slice repeats as label + value in text.
    */
   it('repeats every slice in the legend as text', () => {
     render();
 
     expect(screen.getByText('MG')).toBeInTheDocument();
-    expect(screen.getByText('3.000,22 ha · 50%')).toBeInTheDocument();
+    expect(screen.getByText('3.000,22 ha')).toBeInTheDocument();
     expect(screen.getByText('BA')).toBeInTheDocument();
-    expect(screen.getByText('2.300,00 ha · 38%')).toBeInTheDocument();
+    expect(screen.getByText('2.300,00 ha')).toBeInTheDocument();
     expect(screen.getByText('SP')).toBeInTheDocument();
-    expect(screen.getByText('700,00 ha · 12%')).toBeInTheDocument();
+    expect(screen.getByText('700,00 ha')).toBeInTheDocument();
+  });
+
+  /** The share belongs on the slice; repeating it in the legend only reads as ambiguity. */
+  it('does not repeat the share in the legend', () => {
+    render();
+
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+    expect(screen.queryByText('3.000,22 ha · 50%')).not.toBeInTheDocument();
   });
 
   it('gives the whole chart one accessible description', () => {
@@ -61,10 +69,12 @@ describe('PieChart', () => {
       ],
     });
 
-    // The wide slice carries its share; the sliver would not fit one, so only the legend has it.
+    // The wide slice carries its share; the sliver has no arc to hold one, so it goes unlabelled
+    // on the chart and is identified by name and value in the legend.
     expect(screen.getByText('95%')).toBeInTheDocument();
     expect(screen.queryByText('5%')).not.toBeInTheDocument();
-    expect(screen.getByText('5 · 5%')).toBeInTheDocument();
+    expect(screen.getByText('Fatia fina')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
   it('draws a single category as a continuous ring rather than a degenerate wedge', () => {

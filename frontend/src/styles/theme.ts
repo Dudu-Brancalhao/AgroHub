@@ -17,16 +17,18 @@ export const theme = {
     textMuted: '#5c6b5f',
     textInverted: '#ffffff',
 
-    primary: '#2f7d4f',
-    primaryHover: '#276742',
-    primarySoft: '#e4f0e8',
+    // Verde saturado ao máximo que ainda carrega texto branco: 4.77:1 contra o branco,
+    // acima do mínimo de 4.5:1. O anterior tinha 45% de saturação; este tem 100%.
+    primary: '#008531',
+    primaryHover: '#006b27',
+    primarySoft: '#eafbf0',
 
     danger: '#b3261e',
     dangerHover: '#8f1e18',
     dangerSoft: '#fbe9e7',
 
-    success: '#2f7d4f',
-    successSoft: '#e4f0e8',
+    success: '#008531',
+    successSoft: '#eafbf0',
 
     warning: '#8a6116',
     warningSoft: '#fbf1dc',
@@ -74,8 +76,7 @@ export const theme = {
   },
 
   font: {
-    family:
-      "'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif",
+    family: "'Poppins', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif",
     size: {
       xs: '0.75rem',
       sm: '0.875rem',
@@ -87,7 +88,8 @@ export const theme = {
     weight: {
       regular: 400,
       medium: 500,
-      bold: 700,
+      // 600 e não 700: no Poppins o peso 700 fica pesado demais para títulos de interface.
+      bold: 600,
     },
   },
 
@@ -100,10 +102,22 @@ export const theme = {
 
   easing: 'cubic-bezier(0.2, 0, 0.2, 1)',
 
+  /**
+   * Sombras em duas camadas: uma curta, que encosta o elemento na superfície, e uma longa e
+   * difusa, que dá a profundidade. É o que separa uma sombra que parece moderna de uma que
+   * parece um contorno borrado.
+   *
+   * O tom não é preto puro — é o verde escuro do texto, com opacidade baixa. Sombra preta sobre
+   * fundo colorido acinzenta o que está embaixo.
+   *
+   * Estas sombras substituem as bordas: são elas que delimitam cada cartão agora.
+   */
   shadow: {
-    sm: '0 1px 2px rgba(30, 42, 33, 0.08)',
-    md: '0 4px 12px rgba(30, 42, 33, 0.12)',
-    lg: '0 12px 32px rgba(30, 42, 33, 0.18)',
+    sm: '0 1px 2px rgba(18, 42, 28, 0.04), 0 1px 3px rgba(18, 42, 28, 0.06)',
+    card: '0 1px 2px rgba(18, 42, 28, 0.04), 0 2px 8px rgba(18, 42, 28, 0.06)',
+    cardHover: '0 2px 4px rgba(18, 42, 28, 0.05), 0 8px 20px rgba(18, 42, 28, 0.10)',
+    md: '0 2px 4px rgba(18, 42, 28, 0.04), 0 4px 12px rgba(18, 42, 28, 0.08)',
+    lg: '0 4px 8px rgba(18, 42, 28, 0.05), 0 12px 32px rgba(18, 42, 28, 0.12)',
   },
 
   layout: {

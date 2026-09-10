@@ -39,7 +39,7 @@ const Header = styled.header`
   justify-content: space-between;
   gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => `${theme.space.md} ${theme.space.lg}`};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.surfaceSunken};
 `;
 
 const Title = styled.h2`

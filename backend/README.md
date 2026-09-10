@@ -1,13 +1,15 @@
 # AgroHub — API
 
-Backend do AgroHub. Três entregas até aqui:
+Backend do AgroHub:
 
 1. **Autenticação** — cadastro e login de usuários, e o mecanismo de proteção que as demais
    funcionalidades herdam.
-2. **Cadastro de produtores rurais** — produtores, propriedades, safras e culturas plantadas.
-3. **Painel** — visão consolidada do cadastro, pronta para virar gráficos.
+2. **Cadastro de produtores rurais** — produtores, propriedades e culturas plantadas.
+3. **Painel** — visão consolidada do cadastro.
+4. **Safras** — remodeladas como entidade compartilhada por todo o cadastro.
 
-O frontend será entregue separadamente.
+A interface web está em [`../frontend`](../frontend/README.md). Para uma visão geral do projeto
+inteiro, veja o [README da raiz](../README.md).
 
 ---
 
@@ -42,11 +44,17 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 ```bash
 docker compose up -d
-docker compose exec api npx prisma migrate deploy
 ```
+
+As migrations são aplicadas na subida, dentro do container: o `CMD` do `Dockerfile` roda
+`prisma migrate deploy` antes de iniciar a API. Uma migration que falha derruba o container, em vez
+de deixar a API servindo contra um schema que não corresponde.
 
 - API: `http://localhost:3000/api`
 - Documentação (Swagger): `http://localhost:3000/api/docs`
+
+A versão publicada responde em `https://agrohub-production.up.railway.app`, com o Swagger em
+[`/api/docs`](https://agrohub-production.up.railway.app/api/docs).
 
 ---
 
@@ -119,12 +127,20 @@ Todas as falhas usam o mesmo formato:
   "statusCode": 400,
   "error": "Bad Request",
   "message": "Os dados enviados são inválidos.",
-  "details": [{ "field": "email", "message": "Informe um e-mail válido." }],
   "path": "/api/auth/register",
-  "timestamp": "2026-09-09T14:31:47.002Z",
-  "requestId": "01J7X2J8PD2L7M3N"
+  "timestamp": "2026-09-10T16:00:05.647Z",
+  "requestId": "874b54f7-8b86-47fd-94c2-795db731707a",
+  "details": [
+    { "field": "email", "message": "Informe um e-mail válido." },
+    { "field": "password", "message": "A senha deve conter pelo menos uma letra e um número." },
+    { "field": "password", "message": "A senha deve ter no mínimo 8 caracteres." }
+  ]
 }
 ```
+
+`details` traz **uma entrada por regra violada**, não por campo — acima, a mesma senha aparece duas
+vezes porque quebrou duas regras. Quem preenche o formulário vê tudo o que falta de uma vez, em vez
+de descobrir um erro por tentativa.
 
 | Código | Quando acontece |
 |--------|-----------------|
@@ -241,17 +257,22 @@ Todas estão listadas em [`.env.example`](./.env.example). As que exigem atenç�
 | Variável | Observação |
 |----------|------------|
 | `JWT_SECRET` | Obrigatória, mínimo 32 caracteres, **sem valor padrão**. |
-| `JWT_EXPIRES_IN` | Validade do token (`1h`). Como não há renovação nem revogação, é o único fator que limita o estrago de um token vazado. |
+| `JWT_EXPIRES_IN` | Validade do token (`12h`). Como não há renovação nem revogação, é o único fator que limita o estrago de um token vazado. |
 | `BCRYPT_COST` | `12` em produção. Os testes usam `4` para não gastar minutos por execução. |
 
 ---
 
 # Cadastro de produtores rurais
 
-Registro de quem produz, o quê e onde. A hierarquia é estrita e cada registro pertence a
-exatamente um pai:
+Registro de quem produz, o quê e onde. A posse é estrita — cada registro pertence a exatamente um
+pai — mas a safra fica de fora dessa cadeia:
 
-    Produtor  ->  Propriedade  ->  Safra  ->  Cultura
+    Produtor  ->  Propriedade  ->  Cultura
+                                     |
+                       Safra  --------+   (compartilhada, não pertence a ninguém)
+
+Uma safra não é de uma fazenda: existe uma "2021" para todo o cadastro. Propriedade e safra se
+relacionam **apenas** através das culturas que as ligam.
 
 **Todas as rotas exigem autenticação.** Nenhuma delas é pública: a proteção vem do guard global
 criado na entrega de autenticação, e não de código novo.
@@ -262,21 +283,28 @@ criado na entrega de autenticação, e não de código novo.
 |--------|------|-----------|
 | `POST` | `/api/producers` | Cadastra um produtor |
 | `GET` | `/api/producers` | Lista com paginação e busca |
-| `GET` | `/api/producers/:id` | Produtor com propriedades, safras e culturas |
+| `GET` | `/api/producers/:id` | Produtor com propriedades e culturas agrupadas por safra |
 | `PATCH` | `/api/producers/:id` | Altera nome e/ou documento |
 | `DELETE` | `/api/producers/:id` | **Exclui em cascata** |
 | `POST` | `/api/producers/:id/properties` | Cadastra uma propriedade |
 | `GET` | `/api/producers/:id/properties` | Lista as propriedades do produtor |
-| `GET` | `/api/properties/:id` | Propriedade com safras e culturas |
+| `GET` | `/api/properties/:id` | Propriedade com suas culturas agrupadas por safra |
 | `PATCH` | `/api/properties/:id` | Altera a propriedade |
-| `DELETE` | `/api/properties/:id` | Exclui a propriedade e o que há abaixo |
-| `POST` | `/api/properties/:id/harvests` | Registra uma safra |
-| `GET` | `/api/properties/:id/harvests` | Lista as safras |
-| `PATCH` | `/api/harvests/:id` | Altera o ano da safra |
-| `DELETE` | `/api/harvests/:id` | Exclui a safra e suas culturas |
-| `POST` | `/api/harvests/:id/crops` | Registra uma cultura |
-| `GET` | `/api/harvests/:id/crops` | Lista as culturas |
+| `DELETE` | `/api/properties/:id` | Exclui a propriedade e suas culturas |
+| `POST` | `/api/properties/:id/crops` | Registra uma cultura (safra em `harvestId`, no corpo) |
+| `GET` | `/api/properties/:id/crops` | Lista as culturas da propriedade |
 | `DELETE` | `/api/crops/:id` | Exclui a cultura |
+
+Safras são um recurso próprio, de primeiro nível — não ficam sob uma propriedade:
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| `GET` | `/api/harvests` | Lista as safras |
+| `POST` | `/api/harvests` | Cadastra uma safra (o ano é único no sistema) |
+| `GET` | `/api/harvests/:id` | Uma safra |
+| `PATCH` | `/api/harvests/:id` | Altera o ano — vale para todas as fazendas de uma vez |
+| `DELETE` | `/api/harvests/:id` | **Recusada com `409`** enquanto houver cultura registrada nela |
+| `GET` | `/api/harvests/:id/crops` | O que foi plantado na safra, em todas as fazendas |
 
 ## Exemplo completo
 
@@ -292,10 +320,14 @@ curl -X POST http://localhost:3000/api/producers -H "$AUTH" -H "$JSON" \
 curl -X POST http://localhost:3000/api/producers/<id>/properties -H "$AUTH" -H "$JSON" \
   -d '{"farmName":"Fazenda Santa Helena","city":"Uberaba","state":"MG","totalArea":1500.11,"arableArea":1000,"vegetationArea":500.11}'
 
-# 3. safra e culturas
-curl -X POST http://localhost:3000/api/properties/<id>/harvests -H "$AUTH" -H "$JSON" -d '{"year":2021}'
-curl -X POST http://localhost:3000/api/harvests/<id>/crops -H "$AUTH" -H "$JSON" -d '{"name":"Soja"}'
-curl -X POST http://localhost:3000/api/harvests/<id>/crops -H "$AUTH" -H "$JSON" -d '{"name":"Milho"}'
+# 3. safra — compartilhada por todo o cadastro, criada uma vez só
+curl -X POST http://localhost:3000/api/harvests -H "$AUTH" -H "$JSON" -d '{"year":2021}'
+
+# 4. culturas — a fazenda é a dona; a safra entra como referência no corpo
+curl -X POST http://localhost:3000/api/properties/<propertyId>/crops -H "$AUTH" -H "$JSON" \
+  -d '{"harvestId":"<harvestId>","name":"Soja"}'
+curl -X POST http://localhost:3000/api/properties/<propertyId>/crops -H "$AUTH" -H "$JSON" \
+  -d '{"harvestId":"<harvestId>","name":"Milho"}'
 ```
 
 ## Regras que valem a pena conhecer
@@ -327,8 +359,10 @@ A busca por nome ignora maiúsculas e acentos: procurar por `jose` encontra `Jos
 
 ### Exclusão
 
-**A exclusão é permanente e em cascata.** Excluir um produtor exclui suas propriedades, as safras
-dessas propriedades e as culturas dessas safras. Não há desfazer, nem lixeira, nem histórico.
+**A exclusão é permanente e em cascata.** Excluir um produtor exclui suas propriedades e as
+culturas dessas propriedades. Não há desfazer, nem lixeira, nem histórico.
+
+A cascata é **`Produtor → Propriedade → Cultura`, e para aí.**
 
 Duas proteções limitam o estrago:
 
@@ -336,8 +370,37 @@ Duas proteções limitam o estrago:
 - A resposta informa **quantos registros de cada tipo** foram excluídos, para quem executou saber
   o alcance real do que fez.
 
+Cada rota devolve a sua própria contagem — não existe um formato único:
+
+```jsonc
+DELETE /api/producers/:id   → { "deleted": { "producers": 1, "properties": 2, "crops": 2 } }
+DELETE /api/properties/:id  → { "deleted": { "properties": 1, "crops": 0 } }
+DELETE /api/crops/:id       → { "deleted": { "crops": 1 } }
+DELETE /api/harvests/:id    → { "deleted": { "harvests": 1 } }
+```
+
+### Safra nunca entra na cascata
+
+Uma safra não pertence a ninguém, então **não aparece na contagem de um produtor** — nem como
+`harvests: 0`, que daria a entender que a operação chegou a considerá-las.
+
+E não é convenção de código: a chave estrangeira de cultura para safra é `Restrict`, enquanto a de
+cultura para propriedade é `Cascade`. A assimetria é o modelo de posse, escrito no banco.
+
+```
+propertyId -> Cascade    a cultura pertence à fazenda e morre com ela
+harvestId  -> Restrict   a safra não pertence a ninguém
+```
+
+O outro lado da mesma regra: excluir uma safra é **recusado** enquanto qualquer fazenda tiver
+cultura registrada nela — uma cascata ali apagaria os plantios de todo o cadastro de uma vez.
+
 ```json
-{ "deleted": { "producers": 1, "properties": 3, "harvests": 30, "crops": 89 } }
+{
+  "statusCode": 409,
+  "error": "Conflict",
+  "message": "Não é possível excluir esta safra: existem 6 culturas registradas nela."
+}
 ```
 
 ## Limitações conhecidas
@@ -349,6 +412,11 @@ Decisões, não defeitos:
   qualquer pessoa que crie uma conta pode excluir o cadastro inteiro. Ver *Postura de implantação*
   abaixo.
 - **CNPJ alfanumérico ainda não é aceito.** Ver a seção seguinte.
+- **Safra e safrinha do mesmo ano não são representáveis.** Uma safra é identificada pelo ano, e o
+  ano é único no sistema inteiro — não há como registrar "2021 safrinha" ao lado de "2021". Foi uma
+  troca consciente: a safra deixou de pertencer à fazenda justamente para que "2021" signifique a
+  mesma coisa em todo o cadastro, e é isso que permite comparar fazendas por safra. Representar os
+  dois ciclos exigiria um segundo atributo além do ano.
 - **Cidades não são validadas** contra uma lista oficial de municípios. A UF é validada; a cidade
   é texto livre.
 - **Não existe histórico de alterações** para o usuário. As alterações são registradas em log,

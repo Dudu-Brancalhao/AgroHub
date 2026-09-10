@@ -34,8 +34,10 @@ const Totals = styled.div`
 const Card = styled.section`
   padding: ${({ theme }) => theme.space.lg};
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
+  /* Todos os cartões da linha acompanham o mais alto (item 7). */
+  height: 100%;
 `;
 
 const TotalLabel = styled.p`
@@ -53,7 +55,10 @@ const Breakdowns = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: ${({ theme }) => theme.space.md};
-  align-items: start;
+  /*
+   * Nada de align-items aqui: o padrão do grid e stretch, e e ele que faz os tres cartoes
+   * acompanharem o mais alto da linha. O height 100% no cartao completa o efeito.
+   */
 `;
 
 const CardTitle = styled.h2`

@@ -28,4 +28,19 @@ export default defineConfig({
       },
     },
   },
+
+  /**
+   * `vite preview` serves the built bundle and does NOT inherit `server.proxy`, so without this
+   * every `/api` call 404s against the static server — the built app would look broken for a
+   * reason that has nothing to do with the build.
+   */
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
 });

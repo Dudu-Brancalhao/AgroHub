@@ -136,7 +136,7 @@ discovered from failing tests.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T045 [P] Update `backend/README.md` (**pt-BR**) — a harvest is shared and recorded once, a crop names both the farm and the harvest, a harvest cannot be deleted while in use, and the deletion reports no longer list harvests. Record that safra and safrinha are no longer representable, under the existing limitations section
+- [X] T045 [P] Update `backend/README.md` (**pt-BR**) — a harvest is shared and recorded once, a crop names both the farm and the harvest, a harvest cannot be deleted while in use, and the deletion reports no longer list harvests. Record that safra and safrinha are no longer representable, under the existing limitations section
 - [X] T046 Run the full gate from `backend/package.json` — `lint`, `typecheck`, `test:unit`, `test:integration`, `test:integration-db`, `test:persistence`, `test:security` — and compare the totals against the T002 baseline. A drop in passing tests that is not explained by a rewritten file is a regression (SC-005)
 - [ ] T047 Execute all 17 manual steps in [quickstart.md](./quickstart.md), especially **step 8** (a harvest in use must refuse deletion), **step 12** (soja must count **2**, not 1), **step 14** (documents, uniqueness and the area rule untouched) and **step 16** (the accepted safra/safrinha loss)
 - [X] T048 Confirm the migration destroyed only what was intended by querying the live database via `docker-compose.yml`: `producers`, `properties` and `users` still hold their rows; `crops` and `harvests` are empty and in the new shape ([R-001](./research.md#r-001))

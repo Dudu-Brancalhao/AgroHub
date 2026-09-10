@@ -45,14 +45,15 @@ const List = styled.ul`
 
 const Row = styled.li`
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
+  box-shadow: ${({ theme }) => theme.shadow.card};
 
-  ${transitioned('border-color, box-shadow', '120ms')}
+  ${transitioned('box-shadow, transform', '120ms')}
 
+  /* A linha sobe um fio e a sombra abre — o suficiente para responder ao ponteiro sem saltar. */
   &:hover {
-    border-color: ${({ theme }) => theme.colors.borderStrong};
-    box-shadow: ${({ theme }) => theme.shadow.sm};
+    box-shadow: ${({ theme }) => theme.shadow.cardHover};
+    transform: translateY(-1px);
   }
 `;
 

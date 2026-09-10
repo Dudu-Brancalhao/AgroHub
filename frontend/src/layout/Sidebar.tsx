@@ -28,7 +28,7 @@ const Nav = styled.nav<{ $open: boolean }>`
 
   padding: ${({ theme }) => theme.space.md} ${({ theme }) => theme.space.sm};
   background: ${({ theme }) => theme.colors.surface};
-  border-right: 1px solid ${({ theme }) => theme.colors.border};
+  box-shadow: ${({ theme }) => theme.shadow.sm};
   overflow-y: auto;
 
   @media (max-width: ${({ theme }) => theme.breakpoint.tablet}) {
@@ -76,7 +76,8 @@ const Entry = styled(NavLink)`
 
   &.active {
     background: ${({ theme }) => theme.colors.primarySoft};
-    color: ${({ theme }) => theme.colors.primary};
+    /* O tom mais escuro, não o primário: sobre o verde claro ele rende 6.2:1 em vez de 4.4:1. */
+    color: ${({ theme }) => theme.colors.primaryHover};
   }
 `;
 

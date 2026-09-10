@@ -1,6 +1,6 @@
-import BarChartRounded from '@mui/icons-material/BarChartRounded';
-import GroupsRounded from '@mui/icons-material/GroupsRounded';
-import GrassRounded from '@mui/icons-material/GrassRounded';
+import SpaceDashboardRounded from '@mui/icons-material/SpaceDashboardRounded';
+import PeopleAltRounded from '@mui/icons-material/PeopleAltRounded';
+import SpaRounded from '@mui/icons-material/SpaRounded';
 import MenuRounded from '@mui/icons-material/MenuRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import ChevronLeftRounded from '@mui/icons-material/ChevronLeftRounded';
@@ -13,6 +13,7 @@ import ErrorOutlineRounded from '@mui/icons-material/ErrorOutlineRounded';
 import CheckCircleOutlineRounded from '@mui/icons-material/CheckCircleOutlineRounded';
 import LogoutRounded from '@mui/icons-material/LogoutRounded';
 import AgricultureRounded from '@mui/icons-material/AgricultureRounded';
+import LocalFloristRounded from '@mui/icons-material/LocalFloristRounded';
 import type { SvgIconProps } from '@mui/material/SvgIcon';
 import type { ComponentType } from 'react';
 
@@ -46,10 +47,13 @@ function withSize(Icon: ComponentType<SvgIconProps>, defaultSize = 20) {
   };
 }
 
-export const DashboardIcon = withSize(BarChartRounded);
-export const ProducersIcon = withSize(GroupsRounded);
-export const HarvestIcon = withSize(GrassRounded);
+export const DashboardIcon = withSize(SpaceDashboardRounded);
+export const ProducersIcon = withSize(PeopleAltRounded);
+export const HarvestIcon = withSize(SpaRounded);
 export const FarmIcon = withSize(AgricultureRounded);
+
+/** A marca. Aparece ao lado do nome, no canto superior esquerdo. */
+export const BrandIcon = withSize(LocalFloristRounded);
 
 export const MenuIcon = withSize(MenuRounded);
 export const CloseIcon = withSize(CloseRounded);

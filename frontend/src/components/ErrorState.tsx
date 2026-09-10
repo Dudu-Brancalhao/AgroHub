@@ -10,8 +10,8 @@ const Wrapper = styled.div`
   padding: ${({ theme }) => theme.space.xl} ${({ theme }) => theme.space.lg};
   text-align: center;
   background: ${({ theme }) => theme.colors.dangerSoft};
-  border: 1px solid ${({ theme }) => theme.colors.danger};
   border-radius: ${({ theme }) => theme.radii.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   color: ${({ theme }) => theme.colors.text};
 `;
 

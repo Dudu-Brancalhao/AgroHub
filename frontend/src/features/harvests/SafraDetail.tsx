@@ -34,8 +34,8 @@ const Groups = styled.div`
 
 const Group = styled.section`
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   padding: ${({ theme }) => theme.space.md};
 `;
 

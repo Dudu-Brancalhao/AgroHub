@@ -13,9 +13,10 @@ import { transitioned } from '../styles/motion';
  *
  *   - **A 2px surface-coloured gap separates neighbouring slices**, so two similar hues never
  *     touch edge to edge.
- *   - **Identity is never colour alone.** Every slice repeats in a legend as label + value +
- *     share, and slices big enough to hold one are labelled in place. This is what discharges
- *     the palette's contrast warning — three of the six hues sit below 3:1 on white.
+ *   - **Identity is never colour alone.** Every slice repeats in the legend as label + value,
+ *     which is what discharges the palette's contrast warning — three of the six hues sit below
+ *     3:1 on white. The share is shown once, on the slice itself, rather than twice; the full
+ *     breakdown including every share stays in the chart's accessible description.
  *   - **A donut, not a full pie**, because the hole holds the total. The number a reader most
  *     often wants is then in the middle of the thing they are already looking at.
  */
@@ -249,9 +250,7 @@ export function PieChart({
           <LegendRow key={slice.key}>
             <Swatch $color={slice.color} aria-hidden="true" />
             <LegendLabel title={slice.label}>{slice.label}</LegendLabel>
-            <LegendValue>
-              {slice.value} · {Math.round(slice.share)}%
-            </LegendValue>
+            <LegendValue>{slice.value}</LegendValue>
           </LegendRow>
         ))}
       </Legend>

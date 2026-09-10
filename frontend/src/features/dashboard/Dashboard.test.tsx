@@ -79,13 +79,14 @@ describe('Dashboard', () => {
    * obligates visible labels. Every value must be readable as text, never inferable only from
    * a slice's colour.
    */
-  it('renders every value as real text in the legend, with its share', async () => {
+  it('renders every value as real text in the legend', async () => {
     mockedApi.fetchSummary.mockResolvedValue(summary);
     renderDashboard();
 
-    // Arable is 1.000,00 of 1.500,11 ha — two thirds of the land-use pie.
-    expect(await screen.findByText('1.000,00 ha · 67%')).toBeInTheDocument();
-    expect(screen.getByText('500,11 ha · 33%')).toBeInTheDocument();
+    // The share stays on the slice; the legend carries the label and the value.
+    expect(await screen.findByText('1.000,00 ha')).toBeInTheDocument();
+    expect(screen.getByText('500,11 ha')).toBeInTheDocument();
+    expect(screen.queryByText('1.000,00 ha · 67%')).not.toBeInTheDocument();
   });
 
   it('describes each pie to assistive technology', async () => {

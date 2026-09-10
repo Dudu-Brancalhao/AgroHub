@@ -11,7 +11,7 @@ const Bar = styled.div`
   align-items: center;
   padding: 0 ${({ theme }) => theme.space.md};
   background: ${({ theme }) => theme.colors.surface};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  box-shadow: ${({ theme }) => theme.shadow.card};
 `;
 
 const Side = styled.div`
@@ -25,7 +25,7 @@ const Side = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.space.xs};
   background: ${({ theme }) => theme.colors.surface};
-  border-right: 1px solid ${({ theme }) => theme.colors.border};
+  box-shadow: ${({ theme }) => theme.shadow.card};
 
   @media (max-width: ${({ theme }) => theme.breakpoint.tablet}) {
     display: none;

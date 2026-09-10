@@ -16,9 +16,8 @@ const Card = styled.div`
   max-width: 420px;
   padding: ${({ theme }) => theme.space.xl};
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
-  box-shadow: ${({ theme }) => theme.shadow.sm};
+  box-shadow: ${({ theme }) => theme.shadow.lg};
 
   ${animated(fadeInUp, '180ms', 'ease-out')}
 `;

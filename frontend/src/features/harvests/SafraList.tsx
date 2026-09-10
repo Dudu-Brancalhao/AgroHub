@@ -55,14 +55,15 @@ const Row = styled.li`
   gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   flex-wrap: wrap;
 
-  ${transitioned('border-color', '120ms')}
+  ${transitioned('box-shadow, transform', '120ms')}
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.borderStrong};
+    box-shadow: ${({ theme }) => theme.shadow.cardHover};
+    transform: translateY(-1px);
   }
 `;
 

@@ -9,8 +9,8 @@ const Wrapper = styled.div`
   padding: ${({ theme }) => theme.space.xxl} ${({ theme }) => theme.space.lg};
   text-align: center;
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px dashed ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 

@@ -7,8 +7,8 @@ import type { PropertyDetail } from '../producers/types';
 
 const Card = styled.article`
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   padding: ${({ theme }) => theme.space.md};
   display: flex;
   flex-direction: column;
@@ -44,8 +44,8 @@ const Areas = styled.dl`
   gap: ${({ theme }) => theme.space.sm};
   margin: 0;
   padding: ${({ theme }) => theme.space.sm} 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  border-top: 1px solid ${({ theme }) => theme.colors.surfaceSunken};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.surfaceSunken};
 `;
 
 const AreaLabel = styled.dt`

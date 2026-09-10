@@ -17,8 +17,8 @@ const Breakdowns = styled.div`
 const Card = styled.div`
   padding: ${({ theme }) => theme.space.lg};
   background: ${({ theme }) => theme.colors.surface};
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.lg};
+  box-shadow: ${({ theme }) => theme.shadow.card};
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space.sm};

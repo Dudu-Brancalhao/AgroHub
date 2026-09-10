@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectUserEmail } from '../features/auth/selectors';
 import { signOut } from '../features/auth/authSlice';
 import { sidebarToggled } from '../features/ui/uiSlice';
-import { MenuIcon, SignOutIcon } from '../icons';
+import { BrandIcon, MenuIcon, SignOutIcon } from '../icons';
 import { transitioned } from '../styles/motion';
 
 /**
@@ -27,7 +27,8 @@ const Bar = styled.header`
   padding: 0 ${({ theme }) => theme.space.md};
 
   background: ${({ theme }) => theme.colors.surface};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  /* Sem borda: a sombra é o que separa a barra do conteúdo que passa por baixo. */
+  box-shadow: ${({ theme }) => theme.shadow.sm};
 `;
 
 const MenuButton = styled.button`
@@ -51,6 +52,9 @@ const MenuButton = styled.button`
 `;
 
 const Brand = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xxs};
   font-size: ${({ theme }) => theme.font.size.lg};
   font-weight: ${({ theme }) => theme.font.weight.bold};
   color: ${({ theme }) => theme.colors.primary};
@@ -81,7 +85,7 @@ const SignOutButton = styled.button`
   gap: ${({ theme }) => theme.space.xxs};
   padding: ${({ theme }) => `${theme.space.xxs} ${theme.space.xs}`};
   background: none;
-  border: 1px solid transparent;
+  border: none;
   border-radius: ${({ theme }) => theme.radii.md};
   font-size: ${({ theme }) => theme.font.size.sm};
   color: ${({ theme }) => theme.colors.text};
@@ -90,7 +94,6 @@ const SignOutButton = styled.button`
 
   &:hover {
     background: ${({ theme }) => theme.colors.surfaceSunken};
-    border-color: ${({ theme }) => theme.colors.border};
   }
 `;
 
@@ -104,7 +107,10 @@ export function Header() {
         <MenuIcon />
       </MenuButton>
 
-      <Brand to="/dashboard">AgroHub</Brand>
+      <Brand to="/dashboard">
+        <BrandIcon size={26} />
+        AgroHub
+      </Brand>
 
       <Spacer />
 

@@ -40,13 +40,30 @@ uma única origem — o que importa porque a API não habilita CORS.
 mandando `/api/*` para a API e devolvendo `index.html` para qualquer outro caminho. Sem esse
 retorno para o `index.html`, recarregar um endereço como `/produtores/<id>` responde 404.
 
+Na Vercel, isso é um `vercel.json` na raiz do projeto:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://agrohub-production.up.railway.app/api/:path*"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+Enquanto esse arquivo não existir, a versão publicada carrega em `/` mas responde 404 em qualquer
+outra rota e não alcança a API. Veja o [README da raiz](../README.md#acesso-rápido).
+
 ## Scripts
 
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | Servidor de desenvolvimento com recarga automática |
 | `npm run build` | Verifica os tipos e gera o bundle de produção em `dist/` |
-| `npm run preview` | Serve o bundle já construído |
+| `npm run preview` | Serve o bundle já construído em `4173`, com o mesmo proxy de `/api` |
 | `npm test` | Roda todos os testes (Jest + React Testing Library) |
 | `npm run test:watch` | Testes em modo observador |
 | `npm run lint` | ESLint sobre `src/` |
@@ -67,7 +84,7 @@ src/
 ├── features/    uma pasta por domínio (auth, dashboard, producers, properties, harvests),
 │                cada uma com sua fatia do estado, seu módulo de API e suas telas
 ├── components/  componentes compartilhados sem domínio (botão, campo, modal, esqueleto…)
-├── icons/       ícones em SVG escritos à mão
+├── icons/       ícones do Material Icons, reexportados por papel
 ├── lib/         regras puras: cliente HTTP, áreas, CPF/CNPJ, formatação, UFs
 ├── styles/      tema, estilo global e animações
 └── config/      leitura de variáveis de ambiente
@@ -85,10 +102,18 @@ qualquer outro que tente.
 - **Estado no Redux, escrito à mão.** Redux Toolkit com fatias e thunks explícitos, para que o
   formato do estado continue legível. Cada operação expõe `idle`, `pending`, `succeeded` ou
   `failed`, e uma resposta que chega depois de o usuário sair da tela é descartada.
-- **Ícones e gráficos são feitos aqui.** Nenhuma biblioteca de ícones ou de gráficos: são doze
-  SVGs pequenos e barras proporcionais em CSS.
+- **Os ícones vêm do Material Icons**, mas passam todos por `src/icons/index.tsx`, que os
+  reexporta com nomes de papel (`ProducersIcon`, `TrashIcon`). O resto do código nunca importa a
+  biblioteca direto, então trocar um ícone — ou a biblioteca inteira — mexe em um arquivo só.
+- **Os gráficos são feitos aqui.** Nenhuma biblioteca de gráficos: `PieChart.tsx` desenha as
+  roscas do painel em SVG, com uma paleta de seis cores validada para daltonismo. Cada fatia
+  aparece também na legenda como texto, para que a identidade nunca dependa só da cor.
 - **O token fica no `localStorage`**, para sobreviver a um recarregamento. Sair da conta em uma
   aba desconecta as outras.
+- **Em desenvolvimento, cada requisição sai duas vezes.** É o `StrictMode` do React 18, que monta,
+  desmonta e remonta cada componente para expor efeitos que não aguentam rodar de novo. Vale só no
+  modo de desenvolvimento: `npm run build` remove esse comportamento. Para conferir com os próprios
+  olhos, rode `npm run preview` e olhe a aba de rede — uma requisição por chamada.
 
 ## Testes
 
