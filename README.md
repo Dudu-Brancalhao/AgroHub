@@ -1,163 +1,184 @@
 # AgroHub
 
-Cadastro de produtores rurais: quem produz, em quais fazendas, e o que foi plantado em cada safra.
-Uma API em NestJS, uma interface em React e um painel que resume o cadastro inteiro — total de
-fazendas e hectares, com recortes por estado, por cultura e por uso do solo.
+[![CI](https://github.com/Dudu-Brancalhao/AgroHub/actions/workflows/ci.yml/badge.svg)](https://github.com/Dudu-Brancalhao/AgroHub/actions/workflows/ci.yml)
+
+🇧🇷 [Leia em português](README.pt-BR.md)
+
+A registry of rural producers: who produces, on which farms, and what was planted in each harvest.
+A NestJS API, a React interface, and a dashboard that summarizes the whole registry: total farms and
+hectares, broken down by state, by crop and by land use.
+
+Built as a take-home project, spec-driven: every feature started as a written specification before
+it became code.
 
 ---
 
-## Acesso rápido
+## Highlights
 
-| | Endereço |
+- **Layered NestJS API** (Controller → Service → Repository → Prisma → PostgreSQL), with every
+  route documented in **OpenAPI** and a test that checks the API against that contract.
+- **Container-first:** multi-stage Docker image, `docker compose up` brings up API + database, and
+  migrations run on container boot.
+- **Secure by default:** every route requires a JWT unless explicitly marked public; rate limiting
+  persisted in the database; login attempt limits; no default secrets anywhere.
+- **45 test files in five Jest projects:** unit, integration, integration against a real
+  PostgreSQL, persistence (including uniqueness under concurrent requests) and security (log leaks,
+  OpenAPI conformance).
+- **CI on every push:** lint, typecheck, all test suites against a real Postgres, frontend build
+  and Docker image build.
+
+---
+
+## Quick access
+
+| | Address |
 |---|---|
-| **Aplicação web** | https://agrohub-three.vercel.app/ |
+| **Web app** | https://agrohub-three.vercel.app/ |
 | **API** | https://agrohub-production.up.railway.app |
 | **Swagger** | https://agrohub-production.up.railway.app/api/docs |
 
-O Swagger é o caminho mais rápido para conhecer a API: ele lista todas as rotas, aceita o token no
-botão **Authorize** e permite disparar cada chamada direto do navegador.
+Swagger is the fastest way to explore the API: it lists every route, accepts the token through the
+**Authorize** button, and lets you fire each call straight from the browser.
 
 ---
 
-## Funcionalidades Principais
+## Main features
 
-**Dashboard** — total de fazendas e de hectares cadastrados, com três recortes em gráficos de
-pizza: por estado, por cultura e por uso do solo (agricultável, vegetação e o que sobra sem
-classificação).
+**Dashboard**: total farms and hectares registered, with three pie-chart breakdowns: by state, by
+crop and by land use (arable, vegetation, and whatever remains unclassified).
 
-**Produtores** — lista paginada com busca por nome ou documento, mais cadastro, edição e exclusão.
-Dentro de cada produtor ficam suas fazendas, e dentro de cada fazenda o que foi plantado em cada
-safra.
+**Producers**: paginated list with search by name or document, plus create, edit and delete.
+Each producer holds their farms, and each farm holds what was planted in each harvest.
 
-**Safras** — as safras são compartilhadas por todo o cadastro: existe uma "2021", não uma por
-fazenda. Dá para cadastrar, editar, excluir e ver tudo o que foi plantado em cada uma.
+**Harvests**: harvests are shared across the whole registry: there is one "2021", not one per
+farm. You can create, edit, delete and see everything planted in each one.
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
-    B["Navegador"] --> V["Vite :5173 (dev)<br/>Vercel (prod)<br/>proxy /api"]
-    V --> A["API NestJS<br/>prefixo /api"]
+    B["Browser"] --> V["Vite :5173 (dev)<br/>Vercel (prod)<br/>proxy /api"]
+    V --> A["NestJS API<br/>prefix /api"]
     A --> D[("PostgreSQL 16")]
     A -.-> S["Swagger<br/>/api/docs"]
 ```
 
 ```
 AgroHub/
-├── backend/                      API NestJS + Prisma
+├── backend/                      NestJS API + Prisma
 │   ├── prisma/
-│   │   ├── schema.prisma         tabelas, índices e chaves estrangeiras
-│   │   ├── migrations/           histórico versionado, aplicado no boot do container
-│   │   └── seed.ts               dados de exemplo
+│   │   ├── schema.prisma         tables, indexes and foreign keys
+│   │   ├── migrations/           versioned history, applied on container boot
+│   │   └── seed.ts               sample data
 │   ├── src/
-│   │   ├── producers/            um domínio completo — as três camadas, lado a lado
-│   │   │   ├── *.controller.ts   recebe, valida via DTO, delega
-│   │   │   ├── *.service.ts      a regra de negócio
-│   │   │   ├── *.repository.ts   o único que fala Prisma
-│   │   │   ├── *.module.ts       liga os três
-│   │   │   ├── dto/              o que ENTRA, validado no request
-│   │   │   └── entities/         o que SAI, projetado para a resposta
-│   │   ├── properties/           fazendas e culturas, mesma estrutura
-│   │   ├── harvests/             safras, mesma estrutura
-│   │   ├── dashboard/            os números consolidados, mesma estrutura
-│   │   ├── auth/                 login, registro, guards e strategies
-│   │   ├── users/                só módulo, repositório e entidade — quem expõe é o auth
-│   │   ├── common/               filtros, decorators, validação e configuração do Swagger
-│   │   ├── config/               variáveis de ambiente validadas no boot
-│   │   ├── throttling/           limites de tentativa, persistidos no banco
-│   │   └── health/               a única rota pública além do login e do cadastro
-│   └── test/                     cinco projetos Jest, de unit a security
-├── frontend/                     Interface React + Redux
+│   │   ├── producers/            one complete domain, all three layers side by side
+│   │   │   ├── *.controller.ts   receives, validates via DTO, delegates
+│   │   │   ├── *.service.ts      the business rules
+│   │   │   ├── *.repository.ts   the only one that talks to Prisma
+│   │   │   ├── *.module.ts       wires the three together
+│   │   │   ├── dto/              what comes IN, validated on the request
+│   │   │   └── entities/         what goes OUT, shaped for the response
+│   │   ├── properties/           farms and crops, same structure
+│   │   ├── harvests/             harvests, same structure
+│   │   ├── dashboard/            the consolidated numbers, same structure
+│   │   ├── auth/                 login, registration, guards and strategies
+│   │   ├── users/                module, repository and entity only; auth exposes it
+│   │   ├── common/               filters, decorators, validation and Swagger setup
+│   │   ├── config/               environment variables validated at boot
+│   │   ├── throttling/           attempt limits, persisted in the database
+│   │   └── health/               the only public route besides login and registration
+│   └── test/                     five Jest projects, from unit to security
+├── frontend/                     React + Redux interface
 │   └── src/
-│       ├── features/             uma pasta por domínio (auth, dashboard, producers…)
-│       ├── components/           componentes compartilhados, sem domínio
-│       ├── lib/                  regras puras (áreas, CPF/CNPJ, formatação, httpClient)
-│       ├── app/                  store, hooks tipados e a tabela de rotas
-│       ├── layout/               cabeçalho, menu lateral e transição de página
-│       ├── icons/                Material Icons reexportados por papel
-│       ├── styles/               tema, estilo global e animações
-│       └── config/               leitura das variáveis de ambiente
-├── specs/                        Especificação de cada entrega
-├── .specify/                     constituição do projeto e templates
+│       ├── features/             one folder per domain (auth, dashboard, producers…)
+│       ├── components/           shared, domain-free components
+│       ├── lib/                  pure rules (areas, CPF/CNPJ, formatting, httpClient)
+│       ├── app/                  store, typed hooks and the route table
+│       ├── layout/               header, side menu and page transition
+│       ├── icons/                Material Icons re-exported by role
+│       ├── styles/               theme, global style and animations
+│       └── config/               environment variable reading
+├── specs/                        Specification for each delivery
+├── .specify/                     project constitution and templates
+├── .github/workflows/ci.yml      CI pipeline
 ├── docker-compose.yml            API + PostgreSQL
-└── docker-compose.test.yml       PostgreSQL descartável para testes
+└── docker-compose.test.yml       disposable PostgreSQL for tests
 ```
 
-As regras abaixo não são aspiração: estão escritas em
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md) e cada pull request é revisado
-contra elas.
+The rules below are not aspirations: they are written in
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md) and every pull request is
+reviewed against them.
 
-### Backend — camadas
+### Backend: layers
 
-Toda funcionalidade atravessa três camadas, e a dependência aponta sempre para dentro:
+Every feature goes through three layers, and dependencies always point inward:
 
 ```
-Requisição  →  Controller  →  Service  →  Repository  →  Prisma  →  PostgreSQL
-                (HTTP)       (regra)     (persistência)
+Request  →  Controller  →  Service  →  Repository  →  Prisma  →  PostgreSQL
+             (HTTP)       (rules)     (persistence)
 ```
 
-| Camada | Faz | Não faz |
+| Layer | Does | Does not |
 |---|---|---|
-| **Controller** | Recebe, valida via DTO, delega, mapeia a resposta | Nenhuma regra de negócio |
-| **Service** | A regra de negócio, testável sem HTTP e sem banco | Não conhece `Request`/`Response` |
-| **Repository** | O único lugar que fala Prisma | Não conhece regra de negócio |
+| **Controller** | Receives, validates via DTO, delegates, maps the response | Any business rule |
+| **Service** | The business rules, testable without HTTP and without a database | Know about `Request`/`Response` |
+| **Repository** | The only place that talks to Prisma | Know about business rules |
 
-**SOLID.** Cada classe tem uma responsabilidade declarada; uma unidade que precise de "e" para ser
-descrita é dividida. Os services recebem seus repositories por injeção, então trocar a persistência
-não toca na regra.
+**SOLID.** Each class has one declared responsibility; a unit that needs an "and" to be described
+gets split. Services receive their repositories through injection, so swapping persistence does
+not touch the rules.
 
-**KISS.** Nenhuma abstração entra antes do segundo uso. Não há repositório genérico, nem
-camada de mapeamento configurável, nem factory para um caso só.
+**KISS.** No abstraction goes in before its second use. There is no generic repository, no
+configurable mapping layer, no factory for a single case.
 
-**Clean Code.** Nomes revelam intenção sem precisar de comentário que os traduza. Onde há
-comentário, ele explica **por quê** — a matemática decimal das áreas, a assimetria das chaves
-estrangeiras, o motivo de o login não detalhar campos. Código morto ou comentado não passa na
-revisão.
+**Clean Code.** Names reveal intent without needing a comment to translate them. Where there is a
+comment, it explains **why**: the decimal math of areas, the asymmetry of the foreign keys, the
+reason login does not detail fields. Dead or commented-out code does not pass review.
 
-**Contratos explícitos.** Toda rota é documentada em OpenAPI e tipada por DTO, validada em tempo de
-execução por `class-validator` com um `ValidationPipe` global e *whitelist* ligada — **14 DTOs**
-hoje. Nenhum payload sem tipo atravessa um controller. O contrato vivo fica em
+**Explicit contracts.** Every route is documented in OpenAPI and typed by a DTO, validated at
+runtime by `class-validator` with a global `ValidationPipe` and *whitelist* on (**14 DTOs**
+today). No untyped payload crosses a controller. The live contract is at
 [`/api/docs`](https://agrohub-production.up.railway.app/api/docs).
 
-**Testes.** **45 arquivos de teste**, divididos em cinco projetos Jest com propósitos distintos:
+**Tests.** **45 test files**, split into five Jest projects with distinct purposes:
 
-| Projeto | O que cobre |
+| Project | Covers |
 |---|---|
-| `unit` | Regras de negócio isoladas |
-| `integration` | Endpoints, com o banco substituído em memória |
-| `integration-db` | Endpoints contra um PostgreSQL descartável de verdade |
-| `persistence` | Só o que **é** o banco: unicidade sob concorrência, janela deslizante |
-| `security` | Vazamento em log e conformidade com o contrato OpenAPI |
+| `unit` | Isolated business rules |
+| `integration` | Endpoints, with the database replaced in memory |
+| `integration-db` | Endpoints against a real, disposable PostgreSQL |
+| `persistence` | Only what **is** the database: uniqueness under concurrency, sliding window |
+| `security` | Log leaks and conformance with the OpenAPI contract |
 
-Nenhum teste depende de estado externo real, e todos rodam em qualquer ordem.
+No test depends on real external state, and all of them run in any order.
 
-### Frontend — organizado por feature
+### Frontend: organized by feature
 
-O frontend não é dividido por tipo de arquivo (`components/`, `hooks/`, `services/`), e sim **por
-domínio**. Cada pasta em `features/` carrega tudo o que aquele domínio precisa:
+The frontend is not split by file type (`components/`, `hooks/`, `services/`) but **by domain**.
+Each folder in `features/` carries everything that domain needs. There are six: `auth`,
+`dashboard`, `producers`, `properties`, `harvests` and `ui`. The blast radius of a change is one
+folder, and a file and its test live together.
 
-São seis: `auth`, `dashboard`, `producers`, `properties`, `harvests` e `ui`. O raio de alcance de
-uma mudança é uma pasta, e um arquivo e seu teste andam juntos.
-
-A direção da dependência é a mesma do backend, com outros nomes:
+The dependency direction is the same as in the backend, with other names:
 
 ```
-Componente  →  hook  →  thunk / slice  →  módulo de API  →  httpClient  →  rede
- (só desenha)          (estado)          (contrato)        (transporte)
+Component  →  hook  →  thunk / slice  →  API module  →  httpClient  →  network
+ (draws only)         (state)           (contract)     (transport)
 ```
 
-Duas regras sustentam isso:
+Two rules hold this together:
 
-- **`lib/httpClient.ts` é o único arquivo que chama `fetch`** — e não por convenção: o ESLint
-  recusa qualquer outro que tente, com a mensagem apontando o princípio.
-- **As regras puras moram em `lib/`**, fora de qualquer componente: aritmética de áreas, dígitos
-  verificadores de CPF e CNPJ, formatação pt-BR, UFs. São funções sem React, testadas sozinhas.
+- **`lib/httpClient.ts` is the only file that calls `fetch`**, and not by convention: ESLint
+  rejects any other file that tries, with a message pointing to the principle.
+- **Pure rules live in `lib/`**, outside any component: area arithmetic, CPF and CNPJ check
+  digits, pt-BR formatting, Brazilian states. They are functions without React, tested on their
+  own.
 
-O que é genuinamente compartilhado e sem domínio — botão, campo, modal, esqueleto, gráfico — fica
-em `components/`. **272 testes** cobrem cada tela nos quatro estados: carregando, com dados, vazia
-e com erro.
+What is genuinely shared and domain-free (button, field, modal, skeleton, chart) lives in
+`components/`. **272 tests** cover every screen in its four states: loading, with data, empty and
+error.
 
 ---
 
@@ -174,43 +195,43 @@ e com erro.
 | Swagger | 11 | Jest + Testing Library | 29 / 16 |
 | TypeScript | 5.7 | TypeScript | 5.6 |
 
-**Node.js 20 ou superior** para rodar localmente. A imagem da API usa Node 22.
+**Node.js 20 or later** to run locally. The API image uses Node 22.
 
 ---
 
-## Como rodar localmente
+## Running locally
 
-### Pré-requisitos
+### Prerequisites
 
-Docker, Docker Compose e Node.js 20+.
+Docker, Docker Compose and Node.js 20+.
 
-### 1. Subir a API e o banco
+### 1. Start the API and the database
 
 ```bash
 cp backend/.env.example backend/.env
 
-# Gere um JWT_SECRET real e cole no .env:
+# Generate a real JWT_SECRET and paste it into .env:
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 docker compose up -d
 ```
 
-É só isso. **As migrations são aplicadas sozinhas**, dentro do container, na subida — o `CMD` do
-`Dockerfile` roda `prisma migrate deploy` antes de iniciar a API. Se a migration falhar, o
-container para em vez de servir contra um schema que não corresponde.
+That's it. **Migrations apply themselves**, inside the container, on startup: the `Dockerfile`
+`CMD` runs `prisma migrate deploy` before starting the API. If a migration fails, the container
+stops instead of serving against a schema that doesn't match.
 
 > [!IMPORTANT]
-> **`JWT_SECRET` não tem valor padrão.** A aplicação se recusa a subir sem ele, e o mínimo é 32
-> caracteres. É proposital: um segredo padrão em produção é um segredo público.
+> **`JWT_SECRET` has no default value.** The application refuses to start without it, and the
+> minimum is 32 characters. That's on purpose: a default secret in production is a public secret.
 
-Confirme que subiu:
+Check that it's up:
 
 ```bash
 curl http://localhost:3000/api/health
 # {"status":"ok","timestamp":"..."}
 ```
 
-### 2. Popular com dados de exemplo (opcional)
+### 2. Load sample data (optional)
 
 ```bash
 cd backend
@@ -218,34 +239,34 @@ npm install
 npm run db:seed
 ```
 
-Cria 5 produtores (3 CPF, 2 CNPJ), 5 fazendas em estados diferentes, as safras 2021 e 2022 e 6
-culturas. É **idempotente** — rodar de novo não duplica nada. Ao final imprime os totais que o
-`GET /api/dashboard` deve devolver, para conferência.
+Creates 5 producers (3 CPF, 2 CNPJ), 5 farms in different states, the 2021 and 2022 harvests and
+6 crops. It is **idempotent**: running it again duplicates nothing. At the end it prints the
+totals that `GET /api/dashboard` should return, so you can check.
 
-Para criar também um usuário de acesso, defina antes:
+To also create a login user, set these first:
 
 ```bash
 SEED_USER_EMAIL=demo@agrohub.com.br SEED_USER_PASSWORD=SenhaSegura1 npm run db:seed
 ```
 
-Sem essas duas variáveis nenhum usuário é criado — não há credencial padrão em lugar nenhum.
+Without those two variables no user is created. There is no default credential anywhere.
 
 > [!TIP]
-> **O seed roda na sua máquina, não dentro do container**, então usa o `DATABASE_URL` do
-> `backend/.env` — que precisa apontar para um endereço alcançável de fora do Docker
-> (`localhost:5432`). Vale o mesmo para `prisma migrate` fora do container e para os testes.
+> **The seed runs on your machine, not inside the container**, so it uses the `DATABASE_URL`
+> from `backend/.env`, which must point to an address reachable from outside Docker
+> (`localhost:5432`). The same goes for `prisma migrate` outside the container and for the tests.
 >
-> Se o seu `.env` estiver apontando para um banco remoto, passe a URL local só nesse comando em vez
-> de editar o arquivo:
+> If your `.env` points to a remote database, pass the local URL for that command only instead of
+> editing the file:
 >
 > ```bash
 > DATABASE_URL="postgresql://agrohub:agrohub@localhost:5432/agrohub" npx prisma db seed
 > ```
 >
-> Dentro do container nada disso se aplica: o `docker-compose.yml` define `DATABASE_URL` em
-> `environment:`, apontando para `postgres:5432`.
+> Inside the container none of this applies: `docker-compose.yml` sets `DATABASE_URL` in
+> `environment:`, pointing to `postgres:5432`.
 
-### 3. Subir a interface
+### 3. Start the interface
 
 ```bash
 cd frontend
@@ -254,138 +275,138 @@ npm install
 npm run dev
 ```
 
-A interface sobe em **http://localhost:5173**. Crie uma conta pela própria tela ou entre com o
-usuário do seed.
+The interface runs at **http://localhost:5173**. Create an account on the screen itself or log in
+with the seed user.
 
-### Por que duas portas
+### Why two ports
 
-A API ocupa a 3000, então o servidor de desenvolvimento usa a 5173 e encaminha `/api` para ela.
-Assim o navegador enxerga uma origem só, que é o que dispensa CORS.
+The API takes port 3000, so the dev server uses 5173 and forwards `/api` to it. That way the
+browser sees a single origin, which is what makes CORS unnecessary.
 
 ---
 
-## Portas
+## Ports
 
-| Serviço | Porta | Observação |
+| Service | Port | Notes |
 |---|---|---|
-| API | `3000` | Prefixo global `/api` |
+| API | `3000` | Global prefix `/api` |
 | Swagger | `3000` | `/api/docs` |
-| PostgreSQL | `5432` | Ajustável com `POSTGRES_PORT` |
-| PostgreSQL de teste | `5433` | Só com `docker-compose.test.yml`, dados em memória |
-| Interface (dev) | `5173` | Encaminha `/api` para a 3000 |
+| PostgreSQL | `5432` | Adjustable with `POSTGRES_PORT` |
+| Test PostgreSQL | `5433` | Only with `docker-compose.test.yml`, data in memory |
+| Interface (dev) | `5173` | Forwards `/api` to 3000 |
 
 ---
 
-## Variáveis de ambiente
+## Environment variables
 
 ### Backend (`backend/.env`)
 
-| Variável | Padrão | O que faz |
+| Variable | Default | What it does |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://agrohub:agrohub@localhost:5432/agrohub` | Usada por tudo que roda **fora** do container: migrations, seed, testes. |
-| `JWT_SECRET` | — | **Obrigatória, sem padrão, mínimo 32 caracteres.** |
-| `JWT_EXPIRES_IN` | `12h` | Validade do token. Não há renovação nem revogação, então é o que limita o estrago de um token vazado. |
-| `BCRYPT_COST` | `12` | Custo do hash (4–15). |
-| `THROTTLE_TTL` / `THROTTLE_LIMIT` | `60` / `20` | Limite geral por origem: 20 requisições por minuto. |
-| `REGISTER_THROTTLE_TTL` / `REGISTER_THROTTLE_LIMIT` | `60` / `5` | Limite do cadastro, mais restrito de propósito. |
-| `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` | `5` / `15` | Tentativas de login por identificador. |
-| `LOG_LEVEL` | `info` | Nível do Pino. |
-| `PORT` | `3000` | Porta da API. |
+| `DATABASE_URL` | `postgresql://agrohub:agrohub@localhost:5432/agrohub` | Used by everything that runs **outside** the container: migrations, seed, tests. |
+| `JWT_SECRET` | — | **Required, no default, minimum 32 characters.** |
+| `JWT_EXPIRES_IN` | `12h` | Token lifetime. There is no refresh or revocation, so this is what limits the damage of a leaked token. |
+| `BCRYPT_COST` | `12` | Hash cost (4–15). |
+| `THROTTLE_TTL` / `THROTTLE_LIMIT` | `60` / `20` | General limit per origin: 20 requests per minute. |
+| `REGISTER_THROTTLE_TTL` / `REGISTER_THROTTLE_LIMIT` | `60` / `5` | Registration limit, stricter on purpose. |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` | `5` / `15` | Login attempts per identifier. |
+| `LOG_LEVEL` | `info` | Pino log level. |
+| `PORT` | `3000` | API port. |
 
-Só para o seed, e sem padrão: `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` e `SEED_RESET=true` (limpa
-culturas, safras e produtores antes de popular — nunca mexe em usuários).
+Seed only, and with no default: `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` and `SEED_RESET=true`
+(clears crops, harvests and producers before seeding; never touches users).
 
-> O container **não lê** o `DATABASE_URL` do `.env`: o `docker-compose.yml` define o valor em
-> `environment:`, que tem precedência sobre `env_file:`, apontando para `postgres:5432`. Os dois
-> contextos convivem sem precisar trocar um pelo outro.
+> The container **does not read** `DATABASE_URL` from `.env`: `docker-compose.yml` sets the value
+> in `environment:`, which takes precedence over `env_file:`, pointing to `postgres:5432`. Both
+> contexts coexist without having to swap one for the other.
 
 ### Frontend (`frontend/.env`)
 
-| Variável | Padrão | O que faz |
+| Variable | Default | What it does |
 |---|---|---|
-| `VITE_API_BASE_PATH` | `/api` | **Mantenha relativo.** Uma URL absoluta reintroduz o problema de CORS que a API não configura. |
+| `VITE_API_BASE_PATH` | `/api` | **Keep it relative.** An absolute URL brings back the CORS problem the API does not configure. |
 
 ---
 
 ## API
 
-Prefixo global **`/api`**.
+Global prefix **`/api`**.
 
 | | Base |
 |---|---|
-| Publicada | `https://agrohub-production.up.railway.app/api` |
+| Deployed | `https://agrohub-production.up.railway.app/api` |
 | Local | `http://localhost:3000/api` |
 
-Documentação viva em **`/api/docs`** — [publicada](https://agrohub-production.up.railway.app/api/docs)
-ou em `http://localhost:3000/api/docs`. O Swagger preserva o token entre recarregamentos: entre uma
-vez pelo botão **Authorize** e todas as chamadas seguintes já vão autenticadas.
+Live documentation at **`/api/docs`**: [deployed](https://agrohub-production.up.railway.app/api/docs)
+or at `http://localhost:3000/api/docs`. Swagger keeps the token across reloads: log in once
+through the **Authorize** button and every following call is already authenticated.
 
-**Tudo exige autenticação por padrão.** Dois guards globais protegem a aplicação — primeiro o de
-limite de requisições, depois o de JWT. Uma rota só é pública se estiver explicitamente marcada.
+**Everything requires authentication by default.** Two global guards protect the application,
+first the rate limit guard, then the JWT guard. A route is only public if it is explicitly marked.
 
-### Autenticação
+### Authentication
 
-| Método | Rota | Acesso |
+| Method | Route | Access |
 |---|---|---|
-| `POST` | `/api/auth/register` | **Público** |
-| `POST` | `/api/auth/login` | **Público** |
+| `POST` | `/api/auth/register` | **Public** |
+| `POST` | `/api/auth/login` | **Public** |
 | `GET` | `/api/auth/me` | Bearer |
 
-### Infraestrutura
+### Infrastructure
 
-| Método | Rota | Acesso |
+| Method | Route | Access |
 |---|---|---|
-| `GET` | `/api/health` | **Público** |
+| `GET` | `/api/health` | **Public** |
 
-### Produtores
+### Producers
 
-| Método | Rota | O que faz |
+| Method | Route | What it does |
 |---|---|---|
-| `POST` | `/api/producers` | Cadastra um produtor |
-| `GET` | `/api/producers` | Lista com paginação e busca |
-| `GET` | `/api/producers/:id` | Produtor com fazendas e culturas agrupadas por safra |
-| `PATCH` | `/api/producers/:id` | Altera nome e/ou documento |
-| `DELETE` | `/api/producers/:id` | Exclui em cascata |
+| `POST` | `/api/producers` | Creates a producer |
+| `GET` | `/api/producers` | List with pagination and search |
+| `GET` | `/api/producers/:id` | Producer with farms and crops grouped by harvest |
+| `PATCH` | `/api/producers/:id` | Updates name and/or document |
+| `DELETE` | `/api/producers/:id` | Deletes in cascade |
 
-Paginação: `?page=1&pageSize=20` (máximo 100). Busca: `?search=jose`, que compara com o nome
-(ignorando maiúsculas e acentos) ou com o documento.
+Pagination: `?page=1&pageSize=20` (maximum 100). Search: `?search=jose`, which matches the name
+(ignoring case and accents) or the document.
 
-### Fazendas
+### Farms
 
-| Método | Rota | O que faz |
+| Method | Route | What it does |
 |---|---|---|
-| `POST` | `/api/producers/:producerId/properties` | Cadastra uma fazenda |
-| `GET` | `/api/producers/:producerId/properties` | Lista as fazendas do produtor |
-| `GET` | `/api/properties/:id` | Uma fazenda com suas culturas por safra |
-| `PATCH` | `/api/properties/:id` | Altera a fazenda |
-| `DELETE` | `/api/properties/:id` | Exclui a fazenda e suas culturas |
+| `POST` | `/api/producers/:producerId/properties` | Creates a farm |
+| `GET` | `/api/producers/:producerId/properties` | Lists the producer's farms |
+| `GET` | `/api/properties/:id` | One farm with its crops by harvest |
+| `PATCH` | `/api/properties/:id` | Updates the farm |
+| `DELETE` | `/api/properties/:id` | Deletes the farm and its crops |
 
-### Culturas
+### Crops
 
-| Método | Rota | O que faz |
+| Method | Route | What it does |
 |---|---|---|
-| `POST` | `/api/properties/:propertyId/crops` | Registra uma cultura (a safra vai no corpo, em `harvestId`) |
-| `GET` | `/api/properties/:propertyId/crops` | O que a fazenda plantou |
-| `GET` | `/api/harvests/:harvestId/crops` | O que foi plantado na safra, em todas as fazendas |
-| `DELETE` | `/api/crops/:id` | Remove a cultura |
+| `POST` | `/api/properties/:propertyId/crops` | Registers a crop (the harvest goes in the body, as `harvestId`) |
+| `GET` | `/api/properties/:propertyId/crops` | What the farm planted |
+| `GET` | `/api/harvests/:harvestId/crops` | What was planted in the harvest, across all farms |
+| `DELETE` | `/api/crops/:id` | Removes the crop |
 
-### Safras
+### Harvests
 
-| Método | Rota | O que faz |
+| Method | Route | What it does |
 |---|---|---|
-| `GET` | `/api/harvests` | Lista as safras |
-| `POST` | `/api/harvests` | Cadastra uma safra (ano único) |
-| `GET` | `/api/harvests/:id` | Uma safra |
-| `PATCH` | `/api/harvests/:id` | Altera o ano |
-| `DELETE` | `/api/harvests/:id` | **Recusada com `409` enquanto houver cultura registrada nela** |
+| `GET` | `/api/harvests` | Lists the harvests |
+| `POST` | `/api/harvests` | Creates a harvest (unique year) |
+| `GET` | `/api/harvests/:id` | One harvest |
+| `PATCH` | `/api/harvests/:id` | Updates the year |
+| `DELETE` | `/api/harvests/:id` | **Refused with `409` while any crop is registered in it** |
 
-### Painel
+### Dashboard
 
-| Método | Rota | O que faz |
+| Method | Route | What it does |
 |---|---|---|
-| `GET` | `/api/dashboard` | Totais e os três recortes |
+| `GET` | `/api/dashboard` | Totals and the three breakdowns |
 
-Com o banco populado pelo seed, a resposta é exatamente esta:
+With the database populated by the seed, the response is exactly this:
 
 ```json
 {
@@ -420,21 +441,24 @@ Com o banco populado pelo seed, a resposta é exatamente esta:
 }
 ```
 
-Cada recorte declara sua própria `unit`. Leia sempre por ela, nunca pelo nome do recorte: hoje
-`byState` vem em hectares e `byCrop` em contagem, e supor o contrário faz o rótulo contradizer o
-número. As categorias de `byLandUse` somam **exatamente** o `totals.hectares`.
+Each breakdown declares its own `unit`. Always read by it, never by the breakdown's name: today
+`byState` comes in hectares and `byCrop` as a count, and assuming otherwise makes the label
+contradict the number. The `byLandUse` categories add up **exactly** to `totals.hectares`.
 
-### Exemplo completo
+The user-facing labels and messages are in Portuguese on purpose: the product is for Brazilian
+users.
+
+### Full example
 
 ```bash
 # Local:
 BASE=http://localhost:3000/api
-# Publicada:
+# Deployed:
 # BASE=https://agrohub-production.up.railway.app/api
 
 JSON="Content-Type: application/json"
 
-# 1. conta e token
+# 1. account and token
 curl -X POST $BASE/auth/register -H "$JSON" \
   -d '{"email":"demo@agrohub.com.br","password":"SenhaSegura1"}'
 
@@ -442,30 +466,30 @@ TOKEN=$(curl -s -X POST $BASE/auth/login -H "$JSON" \
   -d '{"email":"demo@agrohub.com.br","password":"SenhaSegura1"}' | jq -r .accessToken)
 AUTH="Authorization: Bearer $TOKEN"
 
-# 2. produtor
+# 2. producer
 curl -X POST $BASE/producers -H "$AUTH" -H "$JSON" \
   -d '{"name":"José Antônio de Almeida","document":"529.982.247-25"}'
 
-# 3. fazenda (1000 + 500,11 = 1500,11 — a soma fecha exatamente)
+# 3. farm (1000 + 500.11 = 1500.11, the sum closes exactly)
 curl -X POST $BASE/producers/<producerId>/properties -H "$AUTH" -H "$JSON" \
   -d '{"farmName":"Fazenda Santa Helena","city":"Uberaba","state":"MG","totalArea":1500.11,"arableArea":1000,"vegetationArea":500.11}'
 
-# 4. safra (compartilhada por todo o cadastro)
+# 4. harvest (shared across the whole registry)
 curl -X POST $BASE/harvests -H "$AUTH" -H "$JSON" -d '{"year":2021}'
 
-# 5. cultura (a fazenda é a dona; a safra é uma referência)
+# 5. crop (the farm owns it; the harvest is a reference)
 curl -X POST $BASE/properties/<propertyId>/crops -H "$AUTH" -H "$JSON" \
   -d '{"harvestId":"<harvestId>","name":"Soja"}'
 
-# 6. painel
+# 6. dashboard
 curl $BASE/dashboard -H "$AUTH"
 ```
 
 ---
 
-## Formato de erro
+## Error format
 
-Toda falha usa o mesmo envelope:
+Every failure uses the same envelope:
 
 ```json
 {
@@ -482,19 +506,19 @@ Toda falha usa o mesmo envelope:
 }
 ```
 
-| Código | Quando acontece |
+| Code | When it happens |
 |---|---|
-| `400` | Dados inválidos. `details` lista **todos** os campos com erro de uma vez. |
-| `401` | Credenciais inválidas, corpo malformado no login, ou token ausente/expirado/adulterado. |
-| `404` | Registro inexistente. |
-| `409` | Conflito: documento ou e-mail já cadastrado, cultura repetida na mesma fazenda e safra, ou safra em uso. |
-| `429` | Excesso de tentativas. O cabeçalho `Retry-After` diz quantos segundos esperar. |
+| `400` | Invalid data. `details` lists **all** fields with errors at once. |
+| `401` | Invalid credentials, malformed login body, or missing/expired/tampered token. |
+| `404` | Record not found. |
+| `409` | Conflict: document or email already registered, same crop repeated on the same farm and harvest, or harvest in use. |
+| `429` | Too many attempts. The `Retry-After` header says how many seconds to wait. |
 
-O `requestId` também vai para o log do servidor — é por ele que se acha o erro completo.
+The `requestId` also goes to the server log, and that's how you find the full error.
 
-### Onde `details` não aparece
+### Where `details` does not appear
 
-**No login.** Um corpo malformado recebe o mesmo `401` genérico de uma credencial errada:
+**On login.** A malformed body gets the same generic `401` as a wrong credential:
 
 ```json
 {
@@ -507,22 +531,24 @@ O `requestId` também vai para o log do servidor — é por ele que se acha o er
 }
 ```
 
-É proposital, e vale para o login apenas. Quem enviou a requisição já sabe o que mandou, então o
-detalhamento não ajuda ninguém legítimo — mas permitiria a um atacante distinguir "o JSON estava
-errado" de "as credenciais estavam erradas". O motivo real fica no log, sob o mesmo `requestId`.
+That's on purpose, and it applies to login only. Whoever sent the request already knows what they
+sent, so the detail helps no legitimate user, but it would let an attacker tell "the JSON was
+wrong" from "the credentials were wrong". The real reason stays in the log, under the same
+`requestId`.
 
-Pela mesma razão, e-mail inexistente e senha errada devolvem respostas idênticas, e quando o limite
-de tentativas é atingido até a senha correta recebe `429` — responder `200` confirmaria ao atacante
-que aquela senha estava certa.
+For the same reason, an unknown email and a wrong password return identical responses, and once
+the attempt limit is reached even the correct password gets `429`: answering `200` would confirm
+to the attacker that the password was right.
 
 ---
 
-## Respostas de exclusão
+## Delete responses
 
-Toda exclusão informa **quantos registros de cada tipo** foram removidos, para quem executou saber
-o alcance real do que fez. A operação é atômica: ou tudo é removido, ou nada é. Não há desfazer.
+Every delete reports **how many records of each type** were removed, so whoever ran it knows the
+real reach of what they did. The operation is atomic: either everything is removed, or nothing is.
+There is no undo.
 
-Cada rota devolve a sua própria contagem — não existe um formato único:
+Each route returns its own count; there is no single format:
 
 ```jsonc
 DELETE /api/producers/:id   → { "deleted": { "producers": 1, "properties": 2, "crops": 2 } }
@@ -531,16 +557,16 @@ DELETE /api/crops/:id       → { "deleted": { "crops": 1 } }
 DELETE /api/harvests/:id    → { "deleted": { "harvests": 1 } }
 ```
 
-A cascata é **`Produtor → Fazenda → Cultura`, e para aí.**
+The cascade is **`Producer → Farm → Crop`, and it stops there.**
 
-**Safra nunca aparece nessa contagem.** Uma safra não pertence a ninguém: existe uma "2021"
-compartilhada por todo o cadastro, e fazenda e safra só se relacionam através das culturas que as
-ligam. Excluir um produtor não toca em safra alguma — e não é convenção de código, é o banco:
-a chave estrangeira de cultura para safra é `Restrict`, o que torna a cascata estruturalmente
-impossível.
+**A harvest never appears in that count.** A harvest belongs to no one: there is one "2021"
+shared across the whole registry, and farm and harvest only relate through the crops that link
+them. Deleting a producer touches no harvest, and that is not a code convention, it's the
+database: the foreign key from crop to harvest is `Restrict`, which makes the cascade structurally
+impossible.
 
-O outro lado da mesma regra: excluir uma safra é **recusado** enquanto qualquer fazenda tiver
-cultura registrada nela, porque uma cascata ali apagaria os plantios de todo o cadastro de uma vez.
+The other side of the same rule: deleting a harvest is **refused** while any farm has a crop
+registered in it, because a cascade there would wipe the plantings of the whole registry at once.
 
 ```json
 {
@@ -552,40 +578,40 @@ cultura registrada nela, porque uma cascata ali apagaria os plantios de todo o c
 
 ---
 
-## Regras que valem conhecer
+## Rules worth knowing
 
-**CPF e CNPJ são validados por dígito verificador**, não por formato. Pontuação é opcional e
-normalizada. Documentos de dígito repetido (`111.111.111-11`) são recusados: eles passam em uma
-verificação ingênua de módulo.
+**CPF and CNPJ are validated by check digit**, not by format. Punctuation is optional and
+normalized. Repeated-digit documents (`111.111.111-11`) are refused: they pass a naive modulus
+check.
 
-**A soma das áreas não pode ultrapassar a total** — `agricultável + vegetação ≤ total`. A
-comparação é feita em **inteiros de centésimos de hectare**, nunca em ponto flutuante. Em
-JavaScript `1000 + 500.11` resulta em `1500.1100000000001`, e uma implementação ingênua recusaria
-uma fazenda de 1500,11 ha perfeitamente comum.
+**The sum of the areas cannot exceed the total**: `arable + vegetation ≤ total`. The comparison is
+done in **integer hundredths of a hectare**, never in floating point. In JavaScript
+`1000 + 500.11` gives `1500.1100000000001`, and a naive implementation would refuse a perfectly
+normal 1,500.11 ha farm.
 
-**As áreas são devolvidas como texto** (`"1500.11"`) pela mesma razão: para o cliente não
-reintroduzir o erro ao ler o JSON.
+**Areas are returned as strings** (`"1500.11"`) for the same reason: so the client does not bring
+the error back when reading the JSON.
 
-**A busca ignora maiúsculas e acentos** — procurar por `jose` encontra `José Antônio`.
+**Search ignores case and accents**: searching for `jose` finds `José Antônio`.
 
-**A mesma cultura não pode ser registrada duas vezes** para a mesma fazenda na mesma safra. Duas
-fazendas na mesma safra, ou uma fazenda em duas safras, são normais.
+**The same crop cannot be registered twice** for the same farm in the same harvest. Two farms in
+the same harvest, or one farm in two harvests, are normal.
 
 ---
 
-## Testes e qualidade
+## Tests and quality
 
 ### Backend
 
 ```bash
 cd backend
 npm run test:unit
-npm run test:integration     # Prisma em memória, sem Docker
+npm run test:integration     # in-memory Prisma, no Docker
 npm run test:security
 npm run test:all
 ```
 
-As suítes que exigem um PostgreSQL de verdade:
+The suites that need a real PostgreSQL:
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
@@ -602,37 +628,42 @@ cd frontend
 npm test
 ```
 
-Roda em jsdom, sem rede e sem servidor. O módulo de API de cada feature é o único ponto de mock,
-então cada tela é exercitada nos quatro estados: carregando, com dados, vazia e com erro.
+Runs in jsdom, with no network and no server. Each feature's API module is the only mock point, so
+every screen is exercised in its four states: loading, with data, empty and error.
 
-### Antes de qualquer merge
+### Before any merge
 
 ```bash
 cd backend  && npm run lint && npm run typecheck && npm run test:all
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-**Não há CI configurada** — por enquanto esses passos são manuais.
+GitHub Actions runs these same steps on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), with a real PostgreSQL for the database
+suites, and also checks that the Docker image builds.
 
 ---
 
-## Como este projeto foi construído
+## How this project was built
 
-Cada entrega nasceu de uma especificação antes de virar código. A pasta [`specs/`](specs/) guarda,
-para cada uma, o que foi pedido (`spec.md`), como seria feito (`plan.md`), a lista de tarefas
-(`tasks.md`) e as decisões técnicas com as alternativas descartadas (`research.md`):
+Every delivery started as a specification before it became code. The [`specs/`](specs/) folder
+keeps, for each one, what was asked (`spec.md`), how it would be done (`plan.md`), the task list
+(`tasks.md`) and the technical decisions with the discarded alternatives (`research.md`):
 
-| | Entrega |
+| | Delivery |
 |---|---|
-| [`001-user-auth`](specs/001-user-auth/) | Autenticação, JWT e limites de tentativa |
-| [`002-rural-producer-crud`](specs/002-rural-producer-crud/) | Produtores, fazendas e culturas |
-| [`003-dashboard-api`](specs/003-dashboard-api/) | O painel |
-| [`004-harvest-remodel`](specs/004-harvest-remodel/) | Safras como entidade compartilhada |
-| [`005-web-frontend`](specs/005-web-frontend/) | A interface web |
+| [`001-user-auth`](specs/001-user-auth/) | Authentication, JWT and attempt limits |
+| [`002-rural-producer-crud`](specs/002-rural-producer-crud/) | Producers, farms and crops |
+| [`003-dashboard-api`](specs/003-dashboard-api/) | The dashboard |
+| [`004-harvest-remodel`](specs/004-harvest-remodel/) | Harvests as a shared entity |
+| [`005-web-frontend`](specs/005-web-frontend/) | The web interface |
 
-As regras que valem para o repositório inteiro — arquitetura em camadas, cobertura de testes,
-segurança por padrão, stack fixa e política de idiomas — estão em
+The rules that apply to the whole repository (layered architecture, test coverage, secure by
+default, fixed stack and language policy) are in
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
 
-Documentação detalhada de cada lado: [`backend/README.md`](backend/README.md) e
-[`frontend/README.md`](frontend/README.md).
+The specs were written spec-first with [spec-kit](https://github.com/github/spec-kit) and
+implemented with Claude Code as the main engineering environment.
+
+Detailed documentation for each side: [`backend/README.md`](backend/README.md) and
+[`frontend/README.md`](frontend/README.md) (in Portuguese).
