@@ -48,16 +48,19 @@ describe('Unauthorized responses (Constitution VIII)', () => {
       .get(JwtService)
       .sign({ sub: 'x', email: 'a@b.com', jti: 'x' }, { expiresIn: '-1s' });
 
-    const responses = await Promise.all([
-      call(),
-      call('Bearer '),
-      call(`Bearer ${validToken}x`),
-      call(validToken),
-      call(`Bearer ${expired}`),
-      call('Bearer not.a.token'),
-    ]);
+    const headers = [
+      undefined,
+      'Bearer ',
+      `Bearer ${validToken}x`,
+      validToken,
+      `Bearer ${expired}`,
+      'Bearer not.a.token',
+    ];
 
-    for (const res of responses) {
+    // Sequential on purpose: concurrent supertest calls on an unlistened server each bind
+    // their own ephemeral port, which intermittently fails with ECONNRESET on CI.
+    for (const header of headers) {
+      const res = await call(header);
       expect(res.status).toBe(401);
       expect(res.body.message).toBe('Autenticação necessária.');
       expect(res.body.details).toBeUndefined();
